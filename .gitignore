@@ -49,3 +49,6 @@ npm-debug.log
 
 # Beads issue tracking (local)
 .beads/
+
+# Agent instructions (local)
+AGENTS.md
