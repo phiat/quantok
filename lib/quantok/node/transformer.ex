@@ -76,10 +76,11 @@ defmodule Quantok.Node.Transformer do
   end
 
   def apply_effect(%Node{config: %{effect: :filter, pattern: pattern}}, tokene) do
-    if pattern && Regex.match?(Regex.compile!(pattern), tokene.value) do
-      [tokene]
-    else
-      []
+    case pattern && Regex.compile(pattern) do
+      {:ok, regex} ->
+        if Regex.match?(regex, tokene.value), do: [tokene], else: []
+      _ ->
+        [tokene]
     end
   end
 

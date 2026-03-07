@@ -17,6 +17,7 @@ defmodule Quantok.World.Event do
           | {:collector_cleared, collector_id :: binary(), cleared_collector :: Quantok.Node.t(), timestamp :: integer()}
           | {:passive_rotated, node_id :: binary(), updated_node :: Quantok.Node.t(), timestamp :: integer()}
           | {:gravity_changed, gravity :: {float(), float()}, timestamp :: integer()}
+          | {:decay_changed, decay_config :: map(), timestamp :: integer()}
           | {:paused, timestamp :: integer()}
           | {:resumed, timestamp :: integer()}
 

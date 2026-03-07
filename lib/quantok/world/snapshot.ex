@@ -42,6 +42,21 @@ defmodule Quantok.World.Snapshot do
       gx = get_in(env, ["gravity", "x"]) || 0.0
       gy = get_in(env, ["gravity", "y"]) || 9.81
       World.set_gravity(world_pid, {gx, gy})
+
+      if decay = env["decay"] do
+        shatter = case decay["shatter"] do
+          "split" -> :split
+          "dissolve" -> :dissolve
+          "explode" -> :explode
+          "fossilize" -> :fossilize
+          _ -> :split
+        end
+        World.set_decay(world_pid, %{
+          enabled: decay["enabled"] == true,
+          rate: decay["rate"] || 1.0,
+          shatter: shatter
+        })
+      end
     end
 
     # Create nodes
@@ -115,7 +130,17 @@ defmodule Quantok.World.Snapshot do
 
   defp serialize_environment(env) do
     {gx, gy} = Map.get(env, :gravity, {0.0, 9.81})
-    %{"gravity" => %{"x" => gx, "y" => gy}, "tick_rate" => Map.get(env, :tick_rate, 30)}
+    decay = Map.get(env, :decay, %{})
+
+    %{
+      "gravity" => %{"x" => gx, "y" => gy},
+      "tick_rate" => Map.get(env, :tick_rate, 30),
+      "decay" => %{
+        "enabled" => Map.get(decay, :enabled, false),
+        "rate" => Map.get(decay, :rate, 1.0),
+        "shatter" => to_string(Map.get(decay, :shatter, :split))
+      }
+    }
   end
 
   defp serialize_node(%Node{} = node) do
@@ -199,12 +224,25 @@ defmodule Quantok.World.Snapshot do
     )
   end
 
+  @allowed_collector_commands ["echo", "cat", "wc -c", "wc -w", "wc -l"]
+
   defp deserialize_node(%{"type" => "collector"} = data) do
+    action = string_to_module(data["config"]["action"], :collector_action)
+    command = data["config"]["command"] || "echo"
+
+    # Shell action commands must be in the allowlist
+    safe_command =
+      if action == Quantok.Node.Collector.Shell and command not in @allowed_collector_commands do
+        "echo"
+      else
+        command
+      end
+
     Collector.new(
       capacity: data["config"]["capacity"] || 8,
       trigger_mode: safe_trigger_mode(data["config"]["trigger_mode"]),
-      action: string_to_module(data["config"]["action"], :collector_action),
-      command: data["config"]["command"] || "echo",
+      action: action,
+      command: safe_command,
       position: deserialize_position(data["position"]),
       label: data["label"] || "Collector"
     )

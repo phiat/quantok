@@ -248,33 +248,39 @@ defmodule QuantokWeb.WorldLive do
       |> Enum.find(&File.exists?/1)
 
     if path do
-      {:ok, snapshot} = Snapshot.load_from_file(path)
+      case Snapshot.load_from_file(path) do
+        {:ok, snapshot} ->
+          # Clear existing world
+          world = World.get_state(socket.assigns.world_pid)
+          Enum.each(Map.keys(world.tokenes), &World.remove_tokene(socket.assigns.world_pid, &1))
+          Enum.each(Map.keys(world.nodes), &World.remove_node(socket.assigns.world_pid, &1))
 
-      # Clear existing world
-      world = World.get_state(socket.assigns.world_pid)
-      Enum.each(Map.keys(world.tokenes), &World.remove_tokene(socket.assigns.world_pid, &1))
-      Enum.each(Map.keys(world.nodes), &World.remove_node(socket.assigns.world_pid, &1))
+          # Load snapshot
+          {:ok, node_count} = Snapshot.load_into(socket.assigns.world_pid, snapshot)
 
-      # Load snapshot
-      {:ok, node_count} = Snapshot.load_into(socket.assigns.world_pid, snapshot)
+          # Push all nodes to client
+          loaded_world = World.get_state(socket.assigns.world_pid)
 
-      # Push all nodes to client
-      loaded_world = World.get_state(socket.assigns.world_pid)
+          socket =
+            socket
+            |> push_event("clear_tokenes", %{})
+            |> push_event("clear_nodes", %{})
+            |> assign(:tokene_count, 0)
+            |> assign(:node_count, node_count)
+            |> assign(:world_name, snapshot["name"] || name)
 
-      socket =
-        socket
-        |> push_event("clear_tokenes", %{})
-        |> push_event("clear_nodes", %{})
-        |> assign(:tokene_count, 0)
-        |> assign(:node_count, node_count)
-        |> assign(:world_name, snapshot["name"] || name)
+          socket =
+            Enum.reduce(Map.values(loaded_world.nodes), socket, fn node, acc ->
+              push_node(acc, node)
+            end)
 
-      socket =
-        Enum.reduce(Map.values(loaded_world.nodes), socket, fn node, acc ->
-          push_node(acc, node)
-        end)
+          {:noreply, socket}
 
-      {:noreply, socket}
+        {:error, reason} ->
+          require Logger
+          Logger.warning("Failed to load world #{safe_name}: #{inspect(reason)}")
+          {:noreply, socket}
+      end
     else
       {:noreply, socket}
     end

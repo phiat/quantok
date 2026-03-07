@@ -164,10 +164,11 @@ defmodule Quantok.World do
 
       event = {:absorbed, collector_id, tokene_id, updated_collector, now()}
       world = Event.apply(world, event)
+      events = [event | events]
 
       {world, events} = maybe_auto_trigger(world, events, status, updated_collector, collector_id)
       broadcast(world, {:absorb, collector_id, tokene_id})
-      {:reply, {:ok, status}, {world, [event | events]}}
+      {:reply, {:ok, status}, {world, events}}
     else
       true -> {:reply, {:error, :full}, {world, events}}
       _ -> {:reply, {:error, :not_found}, {world, events}}
