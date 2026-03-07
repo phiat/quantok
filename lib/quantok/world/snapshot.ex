@@ -166,12 +166,20 @@ defmodule Quantok.World.Snapshot do
   end
 
   defp serialize_node_config(:collector, config) do
-    %{
+    base = %{
       "capacity" => config.capacity,
       "trigger_mode" => to_string(config.trigger_mode),
+      "tick_interval" => config.tick_interval,
       "action" => module_to_string(config.action),
-      "command" => config.command
+      "command" => config.command,
+      "output_mode" => to_string(config.output_mode)
     }
+
+    if config.output_chunker do
+      Map.put(base, "output_chunker", module_to_string(config.output_chunker))
+    else
+      base
+    end
   end
 
   defp serialize_node_config(:transformer, config) do
@@ -238,11 +246,19 @@ defmodule Quantok.World.Snapshot do
         command
       end
 
+    config = data["config"]
+    output_chunker = if config["output_chunker"],
+      do: string_to_module(config["output_chunker"], :chunker),
+      else: nil
+
     Collector.new(
-      capacity: data["config"]["capacity"] || 8,
-      trigger_mode: safe_trigger_mode(data["config"]["trigger_mode"]),
+      capacity: config["capacity"] || 8,
+      trigger_mode: safe_trigger_mode(config["trigger_mode"]),
+      tick_interval: config["tick_interval"] || 120,
       action: action,
       command: safe_command,
+      output_mode: safe_output_mode(config["output_mode"]),
+      output_chunker: output_chunker,
       position: deserialize_position(data["position"]),
       label: data["label"] || "Collector"
     )
@@ -310,8 +326,13 @@ defmodule Quantok.World.Snapshot do
 
   defp safe_trigger_mode("on_full"), do: :on_full
   defp safe_trigger_mode("manual"), do: :manual
-  defp safe_trigger_mode("on_tick"), do: :on_tick
+  defp safe_trigger_mode("timed"), do: :timed
+  defp safe_trigger_mode("on_tick"), do: :timed
   defp safe_trigger_mode(_), do: :on_full
+
+  defp safe_output_mode("emit"), do: :emit
+  defp safe_output_mode("discard"), do: :discard
+  defp safe_output_mode(_), do: :discard
 
   defp safe_effect("splitter"), do: :splitter
   defp safe_effect("crusher"), do: :crusher

@@ -87,6 +87,8 @@ defmodule Quantok.World do
   def set_decay(server, decay_config),
     do: GenServer.cast(server, {:set_decay, decay_config})
 
+  def tick(server), do: GenServer.cast(server, :tick)
+
   # --- Server Callbacks ---
 
   @impl true
@@ -192,11 +194,8 @@ defmodule Quantok.World do
   def handle_call({:trigger_collector, collector_id}, _from, {world, events}) do
     case Map.get(world.nodes, collector_id) do
       %Node{type: :collector} = collector ->
-        {:ok, output, cleared} = Collector.trigger(collector)
-        event = {:triggered, collector_id, output, cleared, now()}
-        world = Event.apply(world, event)
-        broadcast(world, {:trigger, collector_id, output})
-        {:reply, {:ok, output}, {world, [event | events]}}
+        {world, events, output} = do_trigger(world, events, collector_id, collector)
+        {:reply, {:ok, output}, {world, events}}
 
       _ ->
         {:reply, {:error, :not_found}, {world, events}}
@@ -275,16 +274,40 @@ defmodule Quantok.World do
     {:noreply, {world, [event | events]}}
   end
 
+  def handle_cast(:tick, {%{paused: true} = world, events}) do
+    {:noreply, {world, events}}
+  end
+
+  def handle_cast(:tick, {world, events}) do
+    world = %{world | tick_count: world.tick_count + 1}
+
+    # Check all timed collectors
+    {world, events} =
+      world.nodes
+      |> Map.values()
+      |> Enum.filter(&(&1.type == :collector))
+      |> Enum.reduce({world, events}, fn collector, {w, evts} ->
+        case Collector.tick(collector) do
+          {:trigger, updated} ->
+            w = %{w | nodes: Map.put(w.nodes, updated.id, updated)}
+            {w, evts, _output} = do_trigger(w, evts, updated.id, Map.get(w.nodes, updated.id))
+            {w, evts}
+
+          {:ok, updated} ->
+            {%{w | nodes: Map.put(w.nodes, updated.id, updated)}, evts}
+        end
+      end)
+
+    {:noreply, {world, events}}
+  end
+
   # --- Private ---
 
   defp maybe_auto_trigger(world, events, :full, %{config: %{trigger_mode: :on_full}}, collector_id) do
     case Map.get(world.nodes, collector_id) do
       %Node{type: :collector} = collector ->
-        {:ok, output, cleared} = Collector.trigger(collector)
-        event = {:triggered, collector_id, output, cleared, now()}
-        world = Event.apply(world, event)
-        broadcast(world, {:trigger, collector_id, output})
-        {world, [event | events]}
+        {world, events, _output} = do_trigger(world, events, collector_id, collector)
+        {world, events}
 
       _ ->
         {world, events}
@@ -292,6 +315,28 @@ defmodule Quantok.World do
   end
 
   defp maybe_auto_trigger(world, events, _status, _collector, _collector_id), do: {world, events}
+
+  # Shared trigger logic: handles both :discard and :emit output modes
+  defp do_trigger(world, events, collector_id, collector) do
+    case Collector.trigger(collector) do
+      {:ok, output, cleared, emitted_tokenes} ->
+        # :emit mode — trigger + emit new tokenes
+        event = {:triggered, collector_id, output, cleared, now()}
+        world = Event.apply(world, event)
+        emit_event = {:emitted, collector_id, emitted_tokenes, now()}
+        world = Event.apply(world, emit_event)
+        broadcast(world, {:trigger, collector_id, output})
+        broadcast(world, {:emit, collector_id, emitted_tokenes})
+        {world, [emit_event, event | events], output}
+
+      {:ok, output, cleared} ->
+        # :discard mode — trigger only
+        event = {:triggered, collector_id, output, cleared, now()}
+        world = Event.apply(world, event)
+        broadcast(world, {:trigger, collector_id, output})
+        {world, [event | events], output}
+    end
+  end
 
   @rotation_steps [0.0, 0.2618, 0.5236, 0.7854, -0.7854, -0.5236, -0.2618]
   defp rotate_angle(current) do

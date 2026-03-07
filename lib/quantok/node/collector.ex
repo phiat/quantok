@@ -4,16 +4,17 @@ defmodule Quantok.Node.Collector do
 
   Config:
   - :capacity - max buffer slots
-  - :trigger_mode - :on_full | :manual | :on_tick
-  - :tick_interval - ticks between auto-triggers (if :on_tick)
+  - :trigger_mode - :on_full | :manual | :timed
+  - :tick_interval - physics ticks between auto-triggers (if :timed)
   - :action - module that processes buffer contents on trigger
   - :command - command string passed to action
-  - :output_chunker - optional chunker for re-emitting output as tokenes
+  - :output_mode - :discard | :emit (what happens to action output)
+  - :output_chunker - chunker for re-emitting output as tokenes (if :emit)
   """
 
   alias Quantok.{Node, Tokene}
 
-  @type trigger_mode :: :on_full | :manual | :on_tick
+  @type trigger_mode :: :on_full | :manual | :timed
 
   @doc """
   Creates a new collector node.
@@ -23,9 +24,10 @@ defmodule Quantok.Node.Collector do
     config = %{
       capacity: Keyword.get(opts, :capacity, 8),
       trigger_mode: Keyword.get(opts, :trigger_mode, :on_full),
-      tick_interval: Keyword.get(opts, :tick_interval, 60),
+      tick_interval: Keyword.get(opts, :tick_interval, 120),
       action: Keyword.get(opts, :action, __MODULE__.Echo),
       command: Keyword.get(opts, :command, "echo"),
+      output_mode: Keyword.get(opts, :output_mode, :discard),
       output_chunker: Keyword.get(opts, :output_chunker, nil),
       buffer: [],
       ticks_since_trigger: 0
@@ -73,14 +75,25 @@ defmodule Quantok.Node.Collector do
 
   @doc """
   Trigger the collector: process buffer contents and clear the buffer.
-  Returns the output string and the updated (cleared) node.
+  Returns `{:ok, output, cleared_node}` for :discard mode,
+  or `{:ok, output, cleared_node, tokenes}` for :emit mode.
   """
-  @spec trigger(Node.t()) :: {:ok, binary(), Node.t()}
+  @spec trigger(Node.t()) :: {:ok, binary(), Node.t()} | {:ok, binary(), Node.t(), [Tokene.t()]}
   def trigger(%Node{type: :collector, config: config} = node) do
     text = buffer_text(node)
     output = config.action.process(config.command, text)
     cleared = %{node | config: %{config | buffer: [], ticks_since_trigger: 0}}
-    {:ok, output, cleared}
+
+    case config.output_mode do
+      :emit when config.output_chunker != nil ->
+        chunks = config.output_chunker.chunk(output)
+        encoding = config.output_chunker.encoding()
+        tokenes = Enum.map(chunks, &Tokene.new(&1, encoding, source_id: node.id))
+        {:ok, output, cleared, tokenes}
+
+      _ ->
+        {:ok, output, cleared}
+    end
   end
 
   @doc """
@@ -98,4 +111,22 @@ defmodule Quantok.Node.Collector do
   def full?(%Node{type: :collector, config: config}) do
     length(config.buffer) >= config.capacity
   end
+
+  @doc """
+  Advance the tick counter. Returns `{:trigger, updated_node}` if a timed
+  trigger is due (buffer non-empty and tick threshold reached), otherwise
+  `{:ok, updated_node}`.
+  """
+  @spec tick(Node.t()) :: {:ok, Node.t()} | {:trigger, Node.t()}
+  def tick(%Node{type: :collector, config: %{trigger_mode: :timed} = config} = node) do
+    ticks = config.ticks_since_trigger + 1
+
+    if ticks >= config.tick_interval and config.buffer != [] do
+      {:trigger, %{node | config: %{config | ticks_since_trigger: ticks}}}
+    else
+      {:ok, %{node | config: %{config | ticks_since_trigger: ticks}}}
+    end
+  end
+
+  def tick(%Node{type: :collector} = node), do: {:ok, node}
 end

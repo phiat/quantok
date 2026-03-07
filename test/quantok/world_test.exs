@@ -238,6 +238,67 @@ defmodule Quantok.WorldTest do
     end
   end
 
+  describe "tick" do
+    test "tick increments tick_count", %{world: w} do
+      World.tick(w)
+      # cast is async, give it a moment
+      Process.sleep(10)
+      state = World.get_state(w)
+      assert state.tick_count == 1
+    end
+
+    test "tick does nothing when paused", %{world: w} do
+      World.pause(w)
+      World.tick(w)
+      Process.sleep(10)
+      state = World.get_state(w)
+      assert state.tick_count == 0
+    end
+
+    test "timed collector triggers after enough ticks", %{world: w} do
+      collector = Collector.new(trigger_mode: :timed, tick_interval: 3, capacity: 8)
+      {:ok, _} = World.add_node(w, collector)
+
+      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "x", chunker: Quantok.Chunker.Byte)
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
+      {:ok, :ok} = World.absorb_tokene(w, collector.id, tokene.id)
+
+      # Tick 3 times to hit the interval
+      Enum.each(1..3, fn _ -> World.tick(w); Process.sleep(5) end)
+      Process.sleep(10)
+
+      state = World.get_state(w)
+      assert state.nodes[collector.id].config.buffer == []
+    end
+  end
+
+  describe "emit output mode" do
+    test "trigger with emit mode creates new tokenes in world", %{world: w} do
+      collector = Collector.new(
+        capacity: 8,
+        trigger_mode: :manual,
+        action: Quantok.Node.Collector.Reverse,
+        output_mode: :emit,
+        output_chunker: Quantok.Chunker.Byte
+      )
+      {:ok, _} = World.add_node(w, collector)
+
+      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "abc", chunker: Quantok.Chunker.Word)
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
+      {:ok, :ok} = World.absorb_tokene(w, collector.id, tokene.id)
+
+      {:ok, output} = World.trigger_collector(w, collector.id)
+      assert output == "cba"
+
+      state = World.get_state(w)
+      # Reverse of "abc" = "cba", chunked by byte = ["c", "b", "a"]
+      values = state.tokenes |> Map.values() |> Enum.map(& &1.value) |> Enum.sort()
+      assert values == ["a", "b", "c"]
+    end
+  end
+
   describe "pubsub events" do
     test "emitter fire broadcasts event", %{world: w} do
       state = World.get_state(w)

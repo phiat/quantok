@@ -66,6 +66,57 @@ defmodule Quantok.Node.CollectorTest do
     end
   end
 
+  describe "tick/1" do
+    test "increments ticks_since_trigger for timed collectors" do
+      node = Collector.new(trigger_mode: :timed, tick_interval: 5)
+      {:ok, node} = Collector.tick(node)
+      assert node.config.ticks_since_trigger == 1
+    end
+
+    test "triggers when tick threshold reached and buffer non-empty" do
+      node = Collector.new(trigger_mode: :timed, tick_interval: 2)
+      {:ok, node} = Collector.absorb(node, Tokene.new("a", :byte))
+      {:ok, node} = Collector.tick(node)
+      {:trigger, node} = Collector.tick(node)
+      assert node.config.ticks_since_trigger == 2
+    end
+
+    test "does not trigger when buffer empty even at threshold" do
+      node = Collector.new(trigger_mode: :timed, tick_interval: 1)
+      {:ok, node} = Collector.tick(node)
+      assert node.config.ticks_since_trigger == 1
+    end
+
+    test "non-timed collectors just return :ok" do
+      node = Collector.new(trigger_mode: :on_full)
+      {:ok, same} = Collector.tick(node)
+      assert same == node
+    end
+  end
+
+  describe "trigger/1 with emit mode" do
+    test "returns tokenes when output_mode is :emit with chunker" do
+      node = Collector.new(
+        output_mode: :emit,
+        output_chunker: Quantok.Chunker.Word,
+        action: Quantok.Node.Collector.Echo
+      )
+      {:ok, node} = Collector.absorb(node, Tokene.new("hello world", :word))
+      {:ok, output, cleared, tokenes} = Collector.trigger(node)
+
+      assert output == "hello world"
+      assert Collector.buffer_count(cleared) == 0
+      assert length(tokenes) == 2
+      assert Enum.map(tokenes, & &1.value) == ["hello", "world"]
+    end
+
+    test "returns 3-tuple when output_mode is :discard" do
+      node = Collector.new(output_mode: :discard)
+      {:ok, node} = Collector.absorb(node, Tokene.new("test", :word))
+      {:ok, _output, _cleared} = Collector.trigger(node)
+    end
+  end
+
   describe "full?/1" do
     test "false when buffer has space" do
       node = Collector.new(capacity: 5)

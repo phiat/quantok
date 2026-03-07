@@ -27,7 +27,7 @@ Collector (8 slots) -> triggers action when full
 ```
 
 - **Emitters** execute a source (shell command, clock, sequence, manual text) and chunk the output
-- **Collectors** absorb tokenes into a buffer, trigger an action when full (echo, reverse, upcase, count, shell)
+- **Collectors** absorb tokenes into a buffer, trigger an action (echo, reverse, upcase, count, shell). Trigger modes: on-full, manual, or timed (physics-tick interval). Output modes: discard or emit (re-chunk output as new tokenes)
 - **Transformers** modify tokenes by proximity — split, crush, heat, cool, filter, duplicate, paint
 - **Passives** are static geometry — floors, walls, ramps, funnels
 
@@ -75,7 +75,22 @@ Three config layers: world defaults, emitter overrides, encoding base half-lives
 
 ## Collector Buffers
 
-Collectors have visible buffer slots that fill with tokene colors as data is absorbed. Trigger a collector (manually or on-full) to process its buffer contents. See [docs/collector-buffers.md](docs/collector-buffers.md) for the upcoming typed-slot redesign with encoding-aware fit-or-bounce mechanics.
+Collectors have visible buffer slots that fill with tokene colors as data is absorbed. Three trigger modes control when a collector fires:
+
+| Mode | When it fires |
+|------|--------------|
+| `:on_full` | Buffer hits capacity (default) |
+| `:manual` | User clicks "trigger" |
+| `:timed` | Every N physics ticks (~4s at 30Hz) |
+
+After triggering, the output mode controls what happens to the result:
+
+| Mode | Behavior |
+|------|----------|
+| `:discard` | Output displayed/logged, not re-emitted (default) |
+| `:emit` | Output re-chunked into new tokenes, emitted into the world |
+
+See [docs/collector-buffers.md](docs/collector-buffers.md) for the full redesign plan including emitter pairing, configurable ports, typed slots, and encoding-aware fit-or-bounce mechanics.
 
 ## Tiktokenex
 
@@ -100,7 +115,7 @@ just fmt        # format all code
 | PostFX    | Three.js EffectComposer, bloom      |
 | Tokenizer | Tiktokenex (pure Elixir BPE)        |
 | Database  | SQLite (dev) / Postgres (prod)      |
-| Quality   | Credo, ExUnit (151 tests)           |
+| Quality   | Credo, ExUnit (161 tests)           |
 | Tasks     | just                                |
 
 ## License

@@ -40,6 +40,11 @@ defmodule QuantokWeb.WorldLive do
       |> push_node(emitter)
       |> push_node(collector)
 
+    # Start physics tick timer (~30 ticks/sec)
+    tick_rate = 33  # ms (~30Hz)
+    Process.send_after(self(), :tick, tick_rate)
+    socket = assign(socket, :tick_rate, tick_rate)
+
     {:ok, socket}
   end
 
@@ -78,6 +83,9 @@ defmodule QuantokWeb.WorldLive do
           <button phx-click="add_typed_collector" phx-value-action="reverse" phx-value-capacity="8" class="q-btn q-btn--collect">reverse · 8</button>
           <button phx-click="add_typed_collector" phx-value-action="upcase" phx-value-capacity="8" class="q-btn q-btn--collect">upcase · 8</button>
           <button phx-click="add_typed_collector" phx-value-action="count" phx-value-capacity="8" class="q-btn q-btn--collect">count · 8</button>
+          <button phx-click="add_timed_collector" phx-value-capacity="8" phx-value-interval="120" class="q-btn q-btn--collect">timed · 4s</button>
+          <button phx-click="add_emit_collector" phx-value-action="reverse" phx-value-capacity="4" phx-value-chunker="word" class="q-btn q-btn--collect">reverse · emit</button>
+          <button phx-click="add_emit_collector" phx-value-action="upcase" phx-value-capacity="4" phx-value-chunker="word" class="q-btn q-btn--collect">upcase · emit</button>
 
           <div class="q-section">Transformers</div>
           <button phx-click="add_transformer" phx-value-effect="splitter" class="q-btn q-btn--transform">splitter</button>
@@ -181,6 +189,45 @@ defmodule QuantokWeb.WorldLive do
 
     {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
 
+    {:noreply, socket |> push_node(collector) |> update(:node_count, &(&1 + 1))}
+  end
+
+  def handle_event("add_timed_collector", %{"capacity" => cap_str, "interval" => int_str}, socket) do
+    capacity = String.to_integer(cap_str)
+    interval = String.to_integer(int_str)
+    {x, socket} = next_x(socket)
+
+    collector =
+      Collector.new(
+        capacity: capacity,
+        trigger_mode: :timed,
+        tick_interval: interval,
+        position: {x, 250.0},
+        label: "Timed"
+      )
+
+    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
+    {:noreply, socket |> push_node(collector) |> update(:node_count, &(&1 + 1))}
+  end
+
+  def handle_event("add_emit_collector", %{"action" => action, "capacity" => cap_str, "chunker" => chunker}, socket) do
+    capacity = String.to_integer(cap_str)
+    action_mod = collector_action(action)
+    chunker_mod = chunker_module(chunker)
+    {x, socket} = next_x(socket)
+    label = String.capitalize(action) <> " emit"
+
+    collector =
+      Collector.new(
+        capacity: capacity,
+        action: action_mod,
+        output_mode: :emit,
+        output_chunker: chunker_mod,
+        position: {x, 250.0},
+        label: label
+      )
+
+    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
     {:noreply, socket |> push_node(collector) |> update(:node_count, &(&1 + 1))}
   end
 
@@ -468,6 +515,15 @@ defmodule QuantokWeb.WorldLive do
     {:noreply, socket}
   end
 
+  def handle_info(:tick, socket) do
+    unless socket.assigns.paused do
+      World.tick(socket.assigns.world_pid)
+    end
+
+    Process.send_after(self(), :tick, socket.assigns.tick_rate)
+    {:noreply, socket}
+  end
+
   def handle_info({:node_added, _node}, socket), do: {:noreply, socket}
   def handle_info({:node_removed, _id}, socket), do: {:noreply, socket}
   def handle_info({:node_updated, _node}, socket), do: {:noreply, socket}
@@ -537,7 +593,8 @@ defmodule QuantokWeb.WorldLive do
     config
     |> Map.take([
       :capacity, :shape, :angle, :friction, :restitution,
-      :strength, :radius, :effect, :sensor_radius
+      :strength, :radius, :effect, :sensor_radius,
+      :trigger_mode, :output_mode, :tick_interval
     ])
     |> Map.new(fn {k, v} -> {to_string(k), serialize_value(v)} end)
   end
