@@ -64,6 +64,17 @@ defmodule Quantok.Node.CollectorTest do
       assert output == "test"
       assert Collector.buffer_count(cleared) == 0
     end
+
+    test "resets ticks_since_trigger to 0" do
+      node = Collector.new(trigger_mode: :timed, tick_interval: 3)
+      {:ok, node} = Collector.absorb(node, Tokene.new("a", :byte))
+      {:ok, node} = Collector.tick(node)
+      {:ok, node} = Collector.tick(node)
+      assert node.config.ticks_since_trigger == 2
+
+      {:ok, _output, cleared} = Collector.trigger(node)
+      assert cleared.config.ticks_since_trigger == 0
+    end
   end
 
   describe "tick/1" do

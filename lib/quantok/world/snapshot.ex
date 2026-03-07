@@ -346,6 +346,7 @@ defmodule Quantok.World.Snapshot do
   defp safe_trigger_mode(_), do: :on_full
 
   defp safe_output_mode("emit"), do: :emit
+  defp safe_output_mode("paired"), do: :paired
   defp safe_output_mode("discard"), do: :discard
   defp safe_output_mode(_), do: :discard
 

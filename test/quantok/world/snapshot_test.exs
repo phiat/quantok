@@ -58,7 +58,7 @@ defmodule Quantok.World.SnapshotTest do
           "position" => %{"x" => 10.0, "y" => 20.0},
           "config" => %{
             "source" => "Quantok.Node.Emitter.Shell",
-            "command" => "echo hi",
+            "command" => "echo hello world",
             "chunker" => "Quantok.Chunker.Word",
             "emit_rate" => 100
           }
@@ -119,11 +119,11 @@ defmodule Quantok.World.SnapshotTest do
     File.rm_rf!(dir)
   end
 
-  test "snapshot preserves paired_emitter_id", %{pid: pid} do
-    emitter = Emitter.new(command: "echo test", label: "source")
+  test "snapshot preserves paired_emitter_id and output_mode", %{pid: pid} do
+    emitter = Emitter.new(command: "date", label: "source")
     collector = Collector.new(
       output_mode: :paired,
-      paired_emitter_id: "fake-emitter-id",
+      paired_emitter_id: emitter.id,
       label: "paired collector"
     )
 
@@ -131,9 +131,20 @@ defmodule Quantok.World.SnapshotTest do
     World.add_node(pid, collector)
 
     world = World.get_state(pid)
-    {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
 
+    # Verify raw JSON round-trip
+    {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
     collector_node = Enum.find(decoded["nodes"], &(&1["label"] == "paired collector"))
-    assert collector_node["config"]["paired_emitter_id"] == "fake-emitter-id"
+    assert collector_node["config"]["paired_emitter_id"] == emitter.id
+    assert collector_node["config"]["output_mode"] == "paired"
+
+    # Verify load_into round-trip — the deserialized struct must have :paired mode
+    {:ok, pid2} = World.start_link(world_name: "Round-trip")
+    {:ok, 2} = Snapshot.load_into(pid2, decoded)
+
+    loaded_world = World.get_state(pid2)
+    loaded_collector = loaded_world.nodes |> Map.values() |> Enum.find(&(&1.type == :collector))
+    assert loaded_collector.config.output_mode == :paired
+    assert loaded_collector.config.paired_emitter_id == emitter.id
   end
 end

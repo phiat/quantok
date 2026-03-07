@@ -383,27 +383,20 @@ defmodule Quantok.World do
     end
   end
 
-  # Handle paired trigger: fire paired emitter with collector output as command
-  defp handle_paired_trigger(world, events, collector_id, output, cleared, paired_emitter_id, depth) do
-    if depth >= 3 do
-      # Depth guard: max 3 chained paired triggers
-      event = {:triggered, collector_id, output, cleared, now()}
-      world = Event.apply(world, event)
-      broadcast(world, {:trigger, collector_id, output})
-      {world, [event | events], output}
-    else
-      fire_paired_emitter(world, events, collector_id, output, cleared, paired_emitter_id)
-    end
+  # Handle paired trigger: fire paired emitter with collector output as command.
+  # Depth guard reserved for future synchronous chaining (currently physics mediates loops).
+  defp handle_paired_trigger(world, events, collector_id, output, cleared, paired_emitter_id, _depth) do
+    fire_paired_emitter(world, events, collector_id, output, cleared, paired_emitter_id)
   end
 
-  # Fire the paired emitter with the collector's output as its command
+  # Fire the paired emitter with the collector's output as its command.
+  # Uses a temporary struct for firing — does NOT mutate the emitter's stored command.
   defp fire_paired_emitter(world, events, collector_id, output, cleared, paired_emitter_id) do
     case Map.get(world.nodes, paired_emitter_id) do
       %Node{type: :emitter, config: emitter_config} = paired_emitter ->
-        updated_emitter = %{paired_emitter | config: %{emitter_config | command: output}}
-        world = Event.apply(world, {:node_updated, updated_emitter, now()})
+        fire_emitter = %{paired_emitter | config: %{emitter_config | command: output}}
 
-        case Emitter.fire(updated_emitter, Map.get(world.environment, :decay, %{})) do
+        case Emitter.fire(fire_emitter, Map.get(world.environment, :decay, %{})) do
           {:ok, emitted_tokenes} ->
             trig_event = {:triggered, collector_id, output, cleared, now()}
             world = Event.apply(world, trig_event)

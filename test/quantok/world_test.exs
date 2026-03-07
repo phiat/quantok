@@ -364,6 +364,24 @@ defmodule Quantok.WorldTest do
       assert values == ["a", "b", "c"]
     end
 
+    test "paired trigger does not mutate emitter command in world state", %{world: w} do
+      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "original", chunker: Quantok.Chunker.Byte)
+      collector = Collector.new(
+        output_mode: :paired,
+        paired_emitter_id: emitter.id,
+        action: Quantok.Node.Collector.Reverse,
+        trigger_mode: :manual
+      )
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, _} = World.add_node(w, collector)
+
+      fill_collector(w, collector.id, "abc", chunker: Quantok.Chunker.Word)
+      {:ok, _output} = World.trigger_collector(w, collector.id)
+
+      state = World.get_state(w)
+      assert state.nodes[emitter.id].config.command == "original"
+    end
+
     test "paired emitter tokenes have paired emitter as source_id", %{world: w} do
       emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "", chunker: Quantok.Chunker.Byte)
       collector = Collector.new(
