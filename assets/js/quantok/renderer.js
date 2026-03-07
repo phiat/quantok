@@ -1,9 +1,14 @@
 /**
  * Three.js renderer for the Quantok world.
- * Orthographic camera for 2D with lighting for depth.
+ * Orthographic camera with zoom/pan, troika SDF text, bloom post-processing.
  */
 
 import * as THREE from "three";
+import { Text } from "troika-three-text";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
 // Encoding -> color mapping (bright, warm palette against dark bg)
 const ENCODING_COLORS = {
@@ -19,26 +24,38 @@ const ENCODING_COLORS = {
 
 const DEFAULT_COLOR = 0xadb6c4;  // pale slate
 
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 4.0;
+const ZOOM_SPEED = 0.001;
+
 export class WorldRenderer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.meshes = new Map();       // id -> THREE.Mesh
-    this.nodeMeshes = new Map();   // id -> THREE.Group
-    this.textureCache = new Map(); // text -> THREE.Texture
+    this.meshes = new Map();       // id -> THREE.Group (tokene bg + text)
+    this.nodeMeshes = new Map();   // id -> THREE.Group (node)
+    this.textureCache = new Map(); // key -> THREE.Texture (for node labels only)
 
     // Scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x001b2e);
 
     // Ortho camera
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
+    const w = canvas.clientWidth || 1;
+    const h = canvas.clientHeight || 1;
+    this._baseW = w;
+    this._baseH = h;
     this.camera = new THREE.OrthographicCamera(
       -w / 2, w / 2, h / 2, -h / 2, 0.1, 1000
     );
     this.camera.position.z = 100;
 
-    // Renderer — defer setSize until first render to avoid 0x0 canvas
+    // Camera controls state
+    this.zoom = 1.0;
+    this.panOffset = { x: 0, y: 0 };
+    this._isPanning = false;
+    this._panStart = { x: 0, y: 0 };
+
+    // Renderer
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
@@ -54,34 +71,120 @@ export class WorldRenderer {
     directional.position.set(2, 2, 5);
     this.scene.add(directional);
 
-    // Handle resize
+    // Post-processing
+    this._useComposer = false;
+    try {
+      this.composer = new EffectComposer(this.renderer);
+      this.composer.addPass(new RenderPass(this.scene, this.camera));
+
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(w, h),
+        0.15,   // strength (subtle)
+        0.4,    // radius
+        0.85    // threshold
+      );
+      this.composer.addPass(this.bloomPass);
+      this.composer.addPass(new OutputPass());
+      this._useComposer = true;
+    } catch (err) {
+      console.warn("Post-processing unavailable, using direct render:", err);
+    }
+
+    // Event listeners
     this._onResize = () => this.resize();
     window.addEventListener("resize", this._onResize);
 
-    // Camera pan state
-    this.panOffset = { x: 0, y: 0 };
-    this.zoom = 1.0;
+    this._onWheel = (e) => this._handleWheel(e);
+    canvas.addEventListener("wheel", this._onWheel, { passive: false });
   }
 
-  /** Create a tokene mesh (rounded rect with text) */
+  // --- Camera controls ---
+
+  _handleWheel(e) {
+    e.preventDefault();
+    const delta = -e.deltaY * ZOOM_SPEED;
+    const oldZoom = this.zoom;
+    this.zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, this.zoom * (1 + delta)));
+
+    // Zoom toward mouse position
+    const rect = this.canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left - rect.width / 2;
+    const my = -(e.clientY - rect.top - rect.height / 2);
+
+    // Adjust pan so the point under cursor stays fixed
+    const zoomRatio = this.zoom / oldZoom;
+    this.panOffset.x = mx - zoomRatio * (mx - this.panOffset.x);
+    this.panOffset.y = my - zoomRatio * (my - this.panOffset.y);
+
+    this._updateCamera();
+  }
+
+  startPan(screenX, screenY) {
+    this._isPanning = true;
+    this._panStart.x = screenX;
+    this._panStart.y = screenY;
+    this._panOffsetStart = { ...this.panOffset };
+  }
+
+  updatePan(screenX, screenY) {
+    if (!this._isPanning) return;
+    const dx = screenX - this._panStart.x;
+    const dy = -(screenY - this._panStart.y);
+    this.panOffset.x = this._panOffsetStart.x + dx;
+    this.panOffset.y = this._panOffsetStart.y + dy;
+    this._updateCamera();
+  }
+
+  endPan() {
+    this._isPanning = false;
+  }
+
+  _updateCamera() {
+    const w = this._baseW / this.zoom;
+    const h = this._baseH / this.zoom;
+    this.camera.left = -w / 2 - this.panOffset.x / this.zoom;
+    this.camera.right = w / 2 - this.panOffset.x / this.zoom;
+    this.camera.top = h / 2 - this.panOffset.y / this.zoom;
+    this.camera.bottom = -h / 2 - this.panOffset.y / this.zoom;
+    this.camera.updateProjectionMatrix();
+  }
+
+  // --- Tokene rendering (troika SDF text) ---
+
+  /** Create a tokene mesh (colored bg + SDF text) */
   createTokeneMesh(id, value, encoding, width, height) {
     const color = ENCODING_COLORS[encoding] || DEFAULT_COLOR;
+    const group = new THREE.Group();
 
-    // Geometry
-    const geometry = new THREE.PlaneGeometry(width, height);
+    // Background rect
+    const bgGeo = new THREE.PlaneGeometry(width, height);
+    const bgMat = new THREE.MeshBasicMaterial({ color });
+    const bgMesh = new THREE.Mesh(bgGeo, bgMat);
+    bgMesh.position.z = 0;
+    group.add(bgMesh);
 
-    // Material with text texture
-    const texture = this.getTextTexture(value, width, height, color);
-    const material = new THREE.MeshBasicMaterial({
-      map: texture,
-    });
+    // SDF text
+    const displayText = value.length > 12 ? value.slice(0, 11) + "\u2026" : value;
+    const fontSize = Math.min(height * 0.7, width / (displayText.length * 0.62));
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.userData = { id, encoding, value };
-    this.scene.add(mesh);
-    this.meshes.set(id, mesh);
-    return mesh;
+    const text = new Text();
+    text.text = displayText;
+    text.fontSize = Math.max(fontSize, 4);
+    text.color = 0x001b2e;
+    text.anchorX = "center";
+    text.anchorY = "middle";
+    text.fontWeight = "bold";
+    text.position.z = 0.1;
+    text.sync();
+    group.add(text);
+
+    group.userData = { id, encoding, value, bgMesh };
+    this.scene.add(group);
+    this.meshes.set(id, group);
+    return group;
   }
+
+  // --- Node rendering ---
 
   /** Create a node mesh (emitter, collector, passive, transformer) */
   createNodeMesh(id, nodeType, label, x, y, width, height, config = {}) {
@@ -125,24 +228,24 @@ export class WorldRenderer {
       pipe.position.y = -(height / 2 + pipeH / 2);
       group.add(pipe);
 
-      // Small nozzle tip
       const tipGeo = new THREE.PlaneGeometry(pipeW + 4, 3);
       const tip = new THREE.Mesh(tipGeo, pipeMat.clone());
       tip.position.y = -(height / 2 + pipeH);
       group.add(tip);
     }
 
-    // Label
+    // Label (troika SDF text)
     if (label) {
-      const labelTexture = this.getTextTexture(label, width, 16, 0xffffff);
-      const labelGeo = new THREE.PlaneGeometry(width, 16);
-      const labelMat = new THREE.MeshBasicMaterial({
-        map: labelTexture,
-        transparent: true,
-      });
-      const labelMesh = new THREE.Mesh(labelGeo, labelMat);
-      labelMesh.position.y = height / 2 + 10;
-      group.add(labelMesh);
+      const labelText = new Text();
+      labelText.text = label;
+      labelText.fontSize = 10;
+      labelText.color = 0xffffff;
+      labelText.anchorX = "center";
+      labelText.anchorY = "middle";
+      labelText.position.y = height / 2 + 10;
+      labelText.position.z = 0.1;
+      labelText.sync();
+      group.add(labelText);
     }
 
     // Effect radius circle for transformers
@@ -184,30 +287,64 @@ export class WorldRenderer {
     return group;
   }
 
+  /** Update collector buffer slot visuals */
+  updateCollectorBuffer(collectorId, buffer) {
+    const group = this.nodeMeshes.get(collectorId);
+    if (!group) return;
+
+    const slots = group.children.filter(c => c.userData.slotIndex !== undefined);
+    slots.sort((a, b) => a.userData.slotIndex - b.userData.slotIndex);
+
+    for (let i = 0; i < slots.length; i++) {
+      const slot = slots[i];
+      if (i < buffer.length) {
+        const item = buffer[i];
+        const color = ENCODING_COLORS[item.encoding] || DEFAULT_COLOR;
+        slot.material.color.setHex(color);
+        slot.material.opacity = 0.85;
+      } else {
+        slot.material.color.setHex(0x333333);
+        slot.material.opacity = 0.3;
+      }
+    }
+  }
+
+  // --- Transform updates ---
+
   /** Update tokene mesh position and rotation from physics */
   updateTokeneTransform(id, x, y, rotation) {
-    const mesh = this.meshes.get(id);
-    if (mesh) {
-      mesh.position.set(x, y, 0);
-      mesh.rotation.z = rotation;
+    const group = this.meshes.get(id);
+    if (group) {
+      group.position.set(x, y, 0);
+      group.rotation.z = rotation;
     }
   }
 
   /** Update tokene opacity based on integrity */
   updateTokeneIntegrity(id, integrity) {
-    const mesh = this.meshes.get(id);
-    if (mesh) {
-      mesh.material.opacity = 0.3 + integrity * 0.7;
+    const group = this.meshes.get(id);
+    if (group) {
+      const bg = group.userData.bgMesh;
+      if (bg) bg.material.opacity = 0.3 + integrity * 0.7;
     }
   }
 
+  // --- Removal ---
+
   /** Remove a tokene mesh */
   removeTokene(id) {
-    const mesh = this.meshes.get(id);
-    if (mesh) {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
+    const group = this.meshes.get(id);
+    if (group) {
+      this.scene.remove(group);
+      group.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+        // troika Text cleanup
+        if (child.dispose) child.dispose();
+      });
       this.meshes.delete(id);
     }
   }
@@ -219,7 +356,11 @@ export class WorldRenderer {
       this.scene.remove(group);
       group.traverse((child) => {
         if (child.geometry) child.geometry.dispose();
-        if (child.material) child.material.dispose();
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+        if (child.dispose) child.dispose();
       });
       this.nodeMeshes.delete(id);
     }
@@ -233,80 +374,36 @@ export class WorldRenderer {
     }
   }
 
-  /** Create or get cached text texture */
-  getTextTexture(text, width, height, color) {
-    const key = `${text}_${width}_${height}_${color}`;
-    if (this.textureCache.has(key)) return this.textureCache.get(key);
-
-    const canvas = document.createElement("canvas");
-    const scale = 2; // retina
-    canvas.width = Math.max(width * scale, 4);
-    canvas.height = Math.max(height * scale, 4);
-
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Solid bg, full bleed
-    const hex = "#" + (color & 0xffffff).toString(16).padStart(6, "0");
-    ctx.fillStyle = hex;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Dark text, fill the space
-    const fontSize = Math.min(canvas.height * 0.85, canvas.width / (text.length * 0.52));
-    ctx.fillStyle = "#001b2e";
-    ctx.font = `bold ${Math.max(fontSize, 8)}px monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    // Truncate if too long
-    const displayText = text.length > 12 ? text.slice(0, 11) + "\u2026" : text;
-    ctx.fillText(displayText, canvas.width / 2, canvas.height / 2);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
-    this.textureCache.set(key, texture);
-    return texture;
-  }
-
-  /** Render the scene */
-  render() {
-    this.renderer.render(this.scene, this.camera);
-  }
-
-  /** Handle window resize */
-  resize() {
-    const w = this.canvas.clientWidth || 1;
-    const h = this.canvas.clientHeight || 1;
-    this.camera.left = -w / 2;
-    this.camera.right = w / 2;
-    this.camera.top = h / 2;
-    this.camera.bottom = -h / 2;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
-  }
+  // --- Coordinate conversion (accounts for zoom + pan) ---
 
   /** Convert screen coords to world coords */
   screenToWorld(screenX, screenY) {
     const rect = this.canvas.getBoundingClientRect();
-    const x = screenX - rect.left - rect.width / 2;
-    const y = -(screenY - rect.top - rect.height / 2);
+    const ndcX = ((screenX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((screenY - rect.top) / rect.height) * 2 + 1;
+    // Map NDC to camera frustum
+    const x = (ndcX * (this.camera.right - this.camera.left)) / 2
+            + (this.camera.right + this.camera.left) / 2;
+    const y = (ndcY * (this.camera.top - this.camera.bottom)) / 2
+            + (this.camera.top + this.camera.bottom) / 2;
     return { x, y };
   }
 
   /** Convert world coords to screen coords */
   worldToScreen(wx, wy) {
+    const vec = new THREE.Vector3(wx, wy, 0);
+    vec.project(this.camera);
     const rect = this.canvas.getBoundingClientRect();
-    const sx = wx + rect.width / 2 + rect.left;
-    const sy = -wy + rect.height / 2 + rect.top;
+    const sx = (vec.x * 0.5 + 0.5) * rect.width + rect.left;
+    const sy = (-vec.y * 0.5 + 0.5) * rect.height + rect.top;
     return { x: sx, y: sy };
   }
 
   /** Hit-test node meshes at screen coords, returns node id or null */
   hitTestNode(screenX, screenY) {
     const world = this.screenToWorld(screenX, screenY);
-    // Simple AABB check against node groups
     for (const [id, group] of this.nodeMeshes) {
-      const body = group.children[0]; // first child is the body mesh
+      const body = group.children[0];
       if (!body || !body.geometry) continue;
       const params = body.geometry.parameters;
       const hw = params.width / 2;
@@ -321,14 +418,77 @@ export class WorldRenderer {
     return null;
   }
 
+  // --- Rendering ---
+
+  /** Render the scene with post-processing */
+  render() {
+    if (this._useComposer) {
+      this.composer.render();
+    } else {
+      this.renderer.render(this.scene, this.camera);
+    }
+  }
+
+  /** Handle window resize */
+  resize() {
+    const w = this.canvas.clientWidth || 1;
+    const h = this.canvas.clientHeight || 1;
+    this._baseW = w;
+    this._baseH = h;
+    this.renderer.setSize(w, h);
+    if (this._useComposer) this.composer.setSize(w, h);
+    this._updateCamera();
+  }
+
+  // --- Legacy texture method (kept for compatibility if needed) ---
+
+  /** Create or get cached text texture */
+  getTextTexture(text, width, height, color) {
+    const key = `${text}_${width}_${height}_${color}`;
+    if (this.textureCache.has(key)) return this.textureCache.get(key);
+
+    const canvas = document.createElement("canvas");
+    const scale = 2;
+    canvas.width = Math.max(width * scale, 4);
+    canvas.height = Math.max(height * scale, 4);
+
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const hex = "#" + (color & 0xffffff).toString(16).padStart(6, "0");
+    ctx.fillStyle = hex;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const fontSize = Math.min(canvas.height * 0.85, canvas.width / (text.length * 0.52));
+    ctx.fillStyle = "#001b2e";
+    ctx.font = `bold ${Math.max(fontSize, 8)}px monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    const displayText = text.length > 12 ? text.slice(0, 11) + "\u2026" : text;
+    ctx.fillText(displayText, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    this.textureCache.set(key, texture);
+    return texture;
+  }
+
   /** Clean up all GPU resources */
   dispose() {
     window.removeEventListener("resize", this._onResize);
+    this.canvas.removeEventListener("wheel", this._onWheel);
     // Dispose tokene meshes
-    this.meshes.forEach((mesh) => {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-      mesh.material.dispose();
+    this.meshes.forEach((group) => {
+      this.scene.remove(group);
+      group.traverse((child) => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+        if (child.dispose) child.dispose();
+      });
     });
     this.meshes.clear();
     // Dispose node groups
@@ -336,14 +496,19 @@ export class WorldRenderer {
       this.scene.remove(group);
       group.traverse((child) => {
         if (child.geometry) child.geometry.dispose();
-        if (child.material) child.material.dispose();
+        if (child.material) {
+          if (child.material.map) child.material.map.dispose();
+          child.material.dispose();
+        }
+        if (child.dispose) child.dispose();
       });
     });
     this.nodeMeshes.clear();
     // Dispose cached textures
     this.textureCache.forEach((t) => t.dispose());
     this.textureCache.clear();
-    // Dispose renderer
+    // Dispose composer + renderer
+    if (this._useComposer) this.composer.dispose();
     this.renderer.dispose();
   }
 }

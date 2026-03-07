@@ -309,7 +309,9 @@ defmodule QuantokWeb.WorldLive do
 
   def handle_event("clear_collector", %{"node_id" => id}, socket) do
     World.clear_collector(socket.assigns.world_pid, id)
-    {:noreply, socket}
+
+    {:noreply,
+     push_event(socket, "update_collector", %{collector_id: id, buffer: []})}
   end
 
   def handle_event("rotate_passive", %{"node_id" => id}, socket) do
@@ -356,15 +358,29 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_info({:absorb, collector_id, tokene_id}, socket) do
+    buffer_data = get_buffer_data(socket.assigns.world_pid, collector_id)
+
     socket =
       socket
-      |> push_event("absorb_tokene", %{collector_id: collector_id, tokene_id: tokene_id})
+      |> push_event("absorb_tokene", %{
+        collector_id: collector_id,
+        tokene_id: tokene_id,
+        buffer: buffer_data
+      })
       |> update(:tokene_count, &max(&1 - 1, 0))
 
     {:noreply, socket}
   end
 
-  def handle_info({:trigger, _collector_id, _output}, socket) do
+  def handle_info({:trigger, collector_id, output}, socket) do
+    socket =
+      socket
+      |> push_event("update_collector", %{
+        collector_id: collector_id,
+        buffer: [],
+        output: output
+      })
+
     {:noreply, socket}
   end
 
@@ -505,6 +521,20 @@ defmodule QuantokWeb.WorldLive do
     end)
     |> Enum.uniq()
     |> Enum.sort()
+  end
+
+  defp get_buffer_data(world_pid, collector_id) do
+    world = World.get_state(world_pid)
+
+    case Map.get(world.nodes, collector_id) do
+      %{type: :collector, config: %{buffer: buffer}} ->
+        Enum.map(buffer, fn t ->
+          %{value: t.value, encoding: to_string(t.encoding)}
+        end)
+
+      _ ->
+        []
+    end
   end
 
   defp get_emit_rate(world_pid, emitter_id) do

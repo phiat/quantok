@@ -101,6 +101,8 @@ Transformers modify tokenes through proximity (no wires/connections):
 - **Delay line**: holds tokenes for N ticks before releasing (creates timing patterns)
 - **Mirror**: reflects tokene velocity (physics), creating bounce patterns
 - **Gravity well**: like attractor but with proper inverse-square falloff
+- **Merger**: combines N fine-grained tokenes into one coarser tokene
+  (bytes -> word, words -> sentence). Inverse of splitter. See docs/collector-buffers.md.
 
 ---
 
@@ -155,10 +157,11 @@ Transformers modify tokenes through proximity (no wires/connections):
 ### Implemented
 - **Shell**: runs a command, chunks stdout
 - **Manual**: user text input, pass-through
+- **Clock**: emits formatted time at intervals
+- **Sequence**: emits items from a predefined list (e.g. A-Z)
 
 ### Planned
 - **File**: reads a file, chunks contents
-- **Clock**: emits formatted time at intervals
 - **LLM**: streams from an LLM API, natural token boundaries
 
 ### Wild
@@ -181,9 +184,12 @@ Transformers modify tokenes through proximity (no wires/connections):
 ### Implemented
 - **Echo**: returns buffer text as-is
 - **Shell**: runs command with buffered text as argument
+- **Reverse**: reverses buffer text
+- **Upcase**: uppercases buffer text
+- **Count**: returns character count
+- **Display**: shows collected text (no processing)
 
 ### Planned
-- **Display**: shows collected text in a panel (no action)
 - **File**: writes to file on trigger
 - **Concat**: reassembles into single tokene
 
@@ -208,9 +214,11 @@ Transformers modify tokenes through proximity (no wires/connections):
 - Configurable gravity vector {x, y}
 - Pause/resume
 - Node CRUD with PubSub broadcasting
+- Floor, wall, ramp, funnel passives
+- Drag-to-reposition nodes
+- Hover context menus per node type
 
 ### Planned Passives
-- **Floor/Wall/Ramp/Funnel**: static collision geometry
 - **Attractor/Repeller**: force fields
 
 ### Wild World Ideas
@@ -227,6 +235,261 @@ Transformers modify tokenes through proximity (no wires/connections):
 - **Vacuum zones**: zero gravity regions, tokenes drift
 - **Conveyor networks**: linked conveyors create automated paths
 - **Teleporter chains**: A->B->C->A creates a loop
+
+---
+
+## Architecture Ideas
+
+### Server-Side Physics (Deterministic Simulation)
+
+Currently physics runs client-side in Rapier WASM. This limits:
+- No two clients see the same simulation
+- Server can't reason about physical position
+- Multiplayer requires physics state sync
+
+**Proposal**: Run Rapier on the server via Rustler NIF (Rapier is Rust-native).
+Server steps physics at fixed tick rate, broadcasts position snapshots. Client
+becomes a pure renderer with interpolation.
+
+- Server would know exactly which slot a tokene is in
+- Enables deterministic replays and recording
+- Hybrid option: server runs authoritative physics for game logic (collection,
+  transformation), client runs visual interpolation from server snapshots.
+  Like netcode in multiplayer games.
+- Cost: bandwidth for position updates, latency on drag interactions
+
+### Event Sourcing
+
+Instead of mutable World GenServer state, make every action an event:
+
+```elixir
+{:emitted, emitter_id, tokenes, timestamp}
+{:absorbed, collector_id, tokene_id, slot_index, timestamp}
+{:transformed, transformer_id, old_id, new_ids, timestamp}
+{:moved, node_id, old_pos, new_pos, timestamp}
+```
+
+Benefits:
+- **Replay**: rewind and replay any world session
+- **Undo**: pop events to reverse actions
+- **Recording**: save sessions as recordings, play back for demos
+- **Time travel**: scrub through world history with a timeline slider
+- **Debugging**: full audit trail of everything that happened
+
+Current GenServer state becomes a projection (fold over events). Natural
+fit for Elixir/OTP. The World struct is just `Enum.reduce(events, %World{}, &apply/2)`.
+
+### Pipes and Wiring (Explicit Data Flow)
+
+Currently data flow is implicit — tokenes fall via gravity and happen to hit
+collectors. This is the sandbox charm, but limits intentional pipeline design.
+
+**Proposal**: Optional explicit pipes between nodes. An emitter output can be
+wired to a collector input. Tokenes travel through the pipe (rendered as a
+tube/channel) instead of free-falling.
+
+- Pipes have physics too — tokenes slide along them, affected by angle
+- Pipe junctions for splitting flow
+- Pipe valves for gating flow
+- Unwired nodes still use gravity (sandbox mode)
+- Bridges "toy" and "tool" — build reliable pipelines OR chaotic sandboxes
+- Essentially: Quantok as a visual dataflow language (see below)
+
+### Quantok as a Dataflow Language
+
+If you squint, Quantok is becoming a visual dataflow language:
+- Emitters = sources
+- Collectors = sinks
+- Transformers = operators
+- Passives = routing
+- Pipes = edges
+
+This is MAX/MSP or Pure Data for text/data instead of audio. Or LabVIEW for
+information theory. The physics sandbox is the fun entry point, but the
+underlying model is a legitimate dataflow graph.
+
+The question: lean into this (formal graph semantics, deterministic execution,
+export-to-code) or keep it as emergent behavior from physics. Both are valid.
+Physics-first is more novel and fun. Graph-first is more useful as a tool.
+
+Could support both: a "physics mode" (sandbox, gravity, chaos) and a "graph mode"
+(wired, deterministic, no physics, data flows through edges at defined rates).
+Same nodes, same transformers, different execution model.
+
+---
+
+## Information-Theoretic Physics
+
+### Shannon Entropy as Temperature
+
+`H(tokene) = -sum(p(c) * log2(p(c)))` over character frequency distribution.
+
+- "hello" has low entropy (repeated 'l') → cold, settles easily
+- Random bytes have high entropy → hot, moves faster, harder to contain
+- Computed once on creation, stored in metadata
+- Physics maps: entropy → linear velocity multiplier, or → restitution
+
+### Kolmogorov Complexity as Density
+
+Use `zlib.deflate(value).length / value.length` as compression ratio proxy.
+
+- Highly compressible data is "fluffy" (low density, floats up)
+- Incompressible data is "dense" (sinks fast, heavy)
+- Creates natural stratification: compressed data settles, redundant floats
+- Computed via `:zlib.compress/1` in Elixir, ratio stored as metadata
+
+### Mutual Information as Attraction
+
+Tokenes with similar content experience attractive force:
+- Shared substrings, low edit distance → attraction
+- Completely different content → no force
+- Similar data physically clusters together — emergent sorting
+- Could use Jaccard similarity on character bigrams (fast, no external deps)
+- Force magnitude: `F = k * similarity(a, b) / distance^2`
+
+### Token Probability as Weight (BPE-specific)
+
+If we have access to a model's vocabulary frequencies:
+- Common tokens (high frequency) are "light" — expected, ordinary
+- Rare tokens (low frequency) are "heavy" — surprising, unusual
+- Rare words literally weigh more in the physics simulation
+- tiktokenex could expose token rank/frequency alongside encoding
+
+---
+
+## BPE Tokenization as First-Class Mechanic
+
+tiktokenex already exists. BPE is the most interesting encoding because it's
+how LLMs actually see text.
+
+### Token ID Visualization
+Show BPE token ID alongside text value. Token 15339 = "hello". Makes
+tokenization tangible — see how LLMs see text.
+
+### Vocabulary-Aware Collectors
+A collector configured with a specific BPE vocabulary only accepts tokens
+from that vocabulary. GPT-4 tokens vs Claude tokens vs Llama tokens —
+different vocabularies, different physical shapes. Same text, different
+tokenizations, different physics.
+
+### Tokenization Comparison
+Emit the same text through two emitters with different chunkers (word vs BPE
+vs byte). Watch how the same sentence becomes different physical objects.
+Side-by-side comparison of chunking strategies, made visceral.
+
+### Sub-word Visualization
+BPE tokens often split words at surprising boundaries. "unfortunately" might
+become ["un", "fortunately"] or ["un", "for", "tun", "ately"]. Watching
+these splits happen physically — splitter breaks a word, and the BPE
+boundaries are where it fractures — is a powerful teaching tool.
+
+---
+
+## Tokene Lifecycle and Decay
+
+### Time-Based Decay
+Tokenes slowly lose integrity over time. After N seconds without collection,
+they start cracking and eventually shatter into smaller pieces.
+
+- Creates urgency — build your pipeline fast or lose data
+- Half-life by encoding: sentences decay fast (fragile), bits are stable
+- Mirrors information theory — complex structures are harder to maintain
+- Configurable per-world: `decay_rate: 0.01` (integrity loss per second)
+
+### Fossil Record
+Shattered tokene remains (bits) accumulate at the bottom of the world.
+Over time, layers build up like sediment. The world has a geological
+history of data. Dig through layers to see what was emitted hours ago.
+
+### Tokene Age Visualization
+- Fresh tokenes: bright, saturated color
+- Aging tokenes: gradually desaturate, darken
+- Ancient tokenes: muted, cracked, weathered look
+- Age = `System.monotonic_time() - created_at`
+
+---
+
+## World Templates and Circuits
+
+Pre-built node arrangements that solve specific problems, loadable from
+`priv/worlds/` as JSON snapshots:
+
+### Teaching Templates
+- **Word counter**: `emitter(word) → collector(word, action:count)`
+- **Tokenizer demo**: same text through word/byte/BPE emitters side by side
+- **Split cascade**: `emitter(sentence) → splitter → splitter → collector(byte)`
+
+### Functional Circuits
+- **Frequency analyzer**: `emitter(word) → duplicator → [N filter+collector pairs]`
+  each collector filters for a different word, counts hits
+- **Encryption pipeline**: `emitter → XOR transformer → collector`
+- **Compression visualizer**: emit sentence, split to bytes, count = uncompressed
+  size. Add compressor transformer, count output = compressed size. Ratio visible.
+- **Sort pipeline**: emit words, collect into sorted buffer, re-emit in order
+
+### Puzzle Templates
+- "Route date output to echo collector using only 2 ramps"
+- "Split this sentence to individual characters with minimal transformers"
+- "Build a pipeline that reverses word order of a sentence"
+- "Create a feedback loop: collector output feeds back into emitter"
+
+---
+
+## Scripting and Programmable Nodes
+
+Let users define custom node behavior:
+
+### Elixir Snippet Transformer
+```elixir
+# Custom transformer: ROT13
+def transform(tokene) do
+  new_value = String.to_charlist(tokene.value)
+    |> Enum.map(&rot13_char/1)
+    |> List.to_string()
+  %{tokene | value: new_value}
+end
+```
+
+### Expression Evaluator
+Simple expression language for inline transforms:
+- `value | upcase` — uppercase
+- `value | reverse` — reverse string
+- `value | take(3)` — first 3 characters
+- `value | replace("a", "b")` — substitution
+- Composable: `value | upcase | reverse | take(5)`
+
+### Visual Programming
+Wire up built-in operations as a custom composite node. A "macro node"
+that contains a sub-graph of transformers. Collapse complexity.
+
+---
+
+## Rendering Upgrades
+
+### Instanced Rendering (High Priority)
+Each tokene is currently its own mesh + texture. With 500+ tokenes this tanks.
+Three.js `InstancedMesh` renders thousands of similar objects in one draw call.
+
+- Group by encoding type: all words = one instanced mesh
+- Per-instance attributes: position, rotation, color tint, UV offset
+- Texture atlas for text: pre-render unique texts into one atlas
+- Target: 2000+ tokenes at 60fps (currently ~300)
+
+### troika-three-text (High Priority)
+SDF text rendering — crisp at any zoom, single draw call for all text.
+Huge upgrade from canvas textures (blurry when zoomed, expensive to create).
+
+### Post-Processing
+- **Bloom/glow**: UnrealBloomPass for emitter glow, force field visuals.
+  Few lines of Three.js code, dramatic visual improvement.
+- **Particle systems**: THREE.Points for emit/absorb particle effects.
+  GPU-accelerated, lightweight.
+
+### Camera Controls
+- Zoom in/out (mouse wheel → adjust ortho frustum)
+- Pan (middle-click drag or shift+drag)
+- Minimap for large worlds
+- Focus-on-node (double-click node to center camera on it)
 
 ---
 

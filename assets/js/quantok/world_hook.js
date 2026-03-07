@@ -26,6 +26,7 @@ const WorldCanvas = {
     this.handleEvent("set_gravity", (data) => this._dispatch("set_gravity", data));
     this.handleEvent("clear_tokenes", (data) => this._dispatch("clear_tokenes", data));
     this.handleEvent("clear_nodes", (data) => this._dispatch("clear_nodes", data));
+    this.handleEvent("update_collector", (data) => this._dispatch("update_collector", data));
 
     // Async init
     this.rapier = await initRapier();
@@ -78,6 +79,7 @@ const WorldCanvas = {
       case "set_gravity":      this.onSetGravity(data); break;
       case "clear_tokenes":    this.onClearTokenes(); break;
       case "clear_nodes":      this.onClearNodes(); break;
+      case "update_collector": this.onUpdateCollector(data); break;
     }
   },
 
@@ -92,6 +94,13 @@ const WorldCanvas = {
   // --- Node interaction ---
 
   _onMouseDown(e) {
+    // Shift+click or middle-click = pan
+    if (e.shiftKey || e.button === 1) {
+      this.worldRenderer.startPan(e.clientX, e.clientY);
+      this._hideMenu();
+      return;
+    }
+
     const id = this.worldRenderer.hitTestNode(e.clientX, e.clientY);
     if (!id) { this._hideMenu(); return; }
     const group = this.worldRenderer.nodeMeshes.get(id);
@@ -106,13 +115,17 @@ const WorldCanvas = {
   },
 
   _onMouseMove(e) {
+    // Camera pan
+    if (this.worldRenderer._isPanning) {
+      this.worldRenderer.updatePan(e.clientX, e.clientY);
+      return;
+    }
+
     if (this._drag) {
       const world = this.worldRenderer.screenToWorld(e.clientX, e.clientY);
       const nx = world.x - this._drag.offsetX;
       const ny = world.y - this._drag.offsetY;
-      // Update Three.js mesh
       this.worldRenderer.moveNode(this._drag.nodeId, nx, ny);
-      // Update Rapier body (negate Y back to physics space)
       this.physics.moveKinematic(this._drag.nodeId, nx, -ny);
       return;
     }
@@ -122,7 +135,6 @@ const WorldCanvas = {
       this._hoverNode = id;
       this._showMenu(id, e.clientX, e.clientY);
     } else if (!id && this._hoverNode) {
-      // Keep menu visible if mouse is over the menu itself
       const rect = this._menu.getBoundingClientRect();
       if (e.clientX < rect.left || e.clientX > rect.right ||
           e.clientY < rect.top || e.clientY > rect.bottom) {
@@ -132,11 +144,16 @@ const WorldCanvas = {
   },
 
   _onMouseUp() {
+    // End pan
+    if (this.worldRenderer._isPanning) {
+      this.worldRenderer.endPan();
+      return;
+    }
+
     if (this._drag) {
       const id = this._drag.nodeId;
       const group = this.worldRenderer.nodeMeshes.get(id);
       if (group) {
-        // Tell server the new position (convert back to server coords: negate Y)
         this.pushEvent("move_node", {
           node_id: id,
           x: group.position.x,
@@ -220,10 +237,17 @@ const WorldCanvas = {
     });
   },
 
-  onAbsorbTokene({ collector_id, tokene_id }) {
+  onAbsorbTokene({ collector_id, tokene_id, buffer }) {
     this.physics.remove(tokene_id);
     this.worldRenderer.removeTokene(tokene_id);
     this.tokeneData.delete(tokene_id);
+    if (buffer) {
+      this.worldRenderer.updateCollectorBuffer(collector_id, buffer);
+    }
+  },
+
+  onUpdateCollector({ collector_id, buffer }) {
+    this.worldRenderer.updateCollectorBuffer(collector_id, buffer || []);
   },
 
   onTransformTokene({ old_tokene_id, new_tokenes }) {
