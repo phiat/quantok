@@ -191,6 +191,53 @@ defmodule Quantok.WorldTest do
     end
   end
 
+  describe "event sourcing" do
+    test "events are recorded", %{world: w} do
+      emitter = Emitter.new(command: "echo test", chunker: Quantok.Chunker.Word)
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, _} = World.fire_emitter(w, emitter.id)
+
+      events = World.get_events(w)
+      types = Enum.map(events, &elem(&1, 0))
+      assert :node_added in types
+      assert :emitted in types
+    end
+
+    test "events can be filtered by type", %{world: w} do
+      emitter = Emitter.new(command: "echo test", chunker: Quantok.Chunker.Word)
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, _} = World.fire_emitter(w, emitter.id)
+
+      events = World.get_events(w, types: [:emitted])
+      assert length(events) == 1
+      assert elem(hd(events), 0) == :emitted
+    end
+
+    test "state can be rebuilt from events", %{world: w} do
+      alias Quantok.World.Event
+
+      emitter = Emitter.new(command: "echo hi", chunker: Quantok.Chunker.Word)
+      collector = Collector.new(capacity: 8)
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, _} = World.add_node(w, collector)
+      {:ok, _} = World.fire_emitter(w, emitter.id)
+
+      events = World.get_events(w)
+      actual_state = World.get_state(w)
+
+      # Replay events from scratch
+      rebuilt =
+        Enum.reduce(events, %Quantok.World{id: actual_state.id, name: actual_state.name}, fn event, acc ->
+          Event.apply(acc, event)
+        end)
+
+      assert map_size(rebuilt.nodes) == map_size(actual_state.nodes)
+      assert map_size(rebuilt.tokenes) == map_size(actual_state.tokenes)
+      assert Map.keys(rebuilt.nodes) == Map.keys(actual_state.nodes)
+      assert Map.keys(rebuilt.tokenes) == Map.keys(actual_state.tokenes)
+    end
+  end
+
   describe "pubsub events" do
     test "emitter fire broadcasts event", %{world: w} do
       state = World.get_state(w)
