@@ -5,8 +5,7 @@
 
 import { initRapier, PhysicsWorld } from "./physics";
 import { WorldRenderer } from "./renderer";
-
-const OFFSCREEN_THRESHOLD = 2000; // remove tokenes that fall this far
+import { OFFSCREEN_THRESHOLD } from "./utils";
 
 const WorldCanvas = {
   async mounted() {
@@ -231,6 +230,7 @@ const WorldCanvas = {
         // All tokenes drop from the same pipe outlet point
         this.physics.spawnTokene(t.id, baseX, baseY, hw, hh, t.mass);
         this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
+        t._spawnedAt = performance.now();
         this.tokeneData.set(t.id, t);
       }, i * (t.emit_rate || 100));
       this._pendingTimeouts.push(timer);
@@ -266,6 +266,7 @@ const WorldCanvas = {
       const xOff = (i - (new_tokenes.length - 1) / 2) * 10;
       this.physics.spawnTokene(t.id, oldPos.x + xOff, oldPos.y, hw, hh, t.mass);
       this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
+      t._spawnedAt = performance.now();
       this.tokeneData.set(t.id, t);
     });
   },
@@ -356,6 +357,31 @@ const WorldCanvas = {
       this.worldRenderer.removeTokene(id);
       this.tokeneData.delete(id);
       this.pushEvent("tokene_offscreen", { tokene_id: id });
+    }
+
+    // Visual decay: compute integrity per-frame for decaying tokenes
+    const now = performance.now();
+    const shattered = [];
+    for (const [id, t] of this.tokeneData) {
+      if (!t.decay || !t.decay.enabled || !t.decay.half_life) continue;
+      const elapsed = now - (t._spawnedAt || now);
+      const initialIntegrity = t.integrity || 0.5;
+      const ratio = initialIntegrity * Math.pow(0.5, elapsed / t.decay.half_life);
+      this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
+      if (ratio < 0.05 * initialIntegrity) {
+        shattered.push(id);
+      }
+    }
+    // Remove shattered tokenes and notify server
+    for (const id of shattered) {
+      const t = this.tokeneData.get(id);
+      this.physics.remove(id);
+      this.worldRenderer.removeTokene(id);
+      this.tokeneData.delete(id);
+      this.pushEvent("tokene_shattered", {
+        tokene_id: id,
+        shatter: t?.decay?.shatter || "split",
+      });
     }
 
     // Check sensor intersections (collectors + transformers)

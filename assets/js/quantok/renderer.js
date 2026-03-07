@@ -9,24 +9,10 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-
-// Encoding -> color mapping (bright, warm palette against dark bg)
-const ENCODING_COLORS = {
-  bit:      0xe0e0e0,
-  byte:     0x66aaee,
-  rune:     0xeea855,
-  token:    0x55ddaa,
-  ngram:    0x55dddd,
-  word:     0xffc49b,  // peach glow
-  phrase:   0xee9933,
-  sentence: 0xd4a0ff,
-};
-
-const DEFAULT_COLOR = 0xadb6c4;  // pale slate
-
-const ZOOM_MIN = 0.25;
-const ZOOM_MAX = 4.0;
-const ZOOM_SPEED = 0.001;
+import {
+  ENCODING_COLORS, DEFAULT_COLOR, BG_COLOR,
+  ZOOM_MIN, ZOOM_MAX, ZOOM_SPEED, lerpColor,
+} from "./utils";
 
 export class WorldRenderer {
   constructor(canvas) {
@@ -37,7 +23,7 @@ export class WorldRenderer {
 
     // Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x001b2e);
+    this.scene.background = new THREE.Color(BG_COLOR);
 
     // Ortho camera
     const w = canvas.clientWidth || 1;
@@ -170,7 +156,7 @@ export class WorldRenderer {
     const text = new Text();
     text.text = displayText;
     text.fontSize = Math.max(fontSize, 4);
-    text.color = 0x001b2e;
+    text.color = BG_COLOR;
     text.anchorX = "center";
     text.anchorY = "middle";
     text.fontWeight = "bold";
@@ -178,7 +164,7 @@ export class WorldRenderer {
     text.sync();
     group.add(text);
 
-    group.userData = { id, encoding, value, bgMesh };
+    group.userData = { id, encoding, value, bgMesh, baseColor: color };
     this.scene.add(group);
     this.meshes.set(id, group);
     return group;
@@ -320,12 +306,25 @@ export class WorldRenderer {
     }
   }
 
-  /** Update tokene opacity based on integrity */
-  updateTokeneIntegrity(id, integrity) {
+  /** Update tokene visual decay: desaturation + opacity based on integrity ratio */
+  updateTokeneDecay(id, integrityRatio) {
     const group = this.meshes.get(id);
-    if (group) {
-      const bg = group.userData.bgMesh;
-      if (bg) bg.material.opacity = 0.3 + integrity * 0.7;
+    if (!group) return;
+    const { bgMesh, baseColor } = group.userData;
+    if (!bgMesh) return;
+
+    // Desaturate: lerp from base color toward grey as integrity drops
+    const { r, g, b } = lerpColor(0x555555, baseColor, integrityRatio);
+    bgMesh.material.color.setRGB(r, g, b);
+
+    // Opacity: fade as integrity drops
+    if (!bgMesh.material.transparent) bgMesh.material.transparent = true;
+    bgMesh.material.opacity = 0.3 + t * 0.7;
+
+    // Pulse when near death (integrity < 15%)
+    if (t < 0.15 && t > 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.01);
+      bgMesh.material.opacity *= 0.4 + pulse * 0.6;
     }
   }
 

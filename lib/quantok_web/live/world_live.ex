@@ -295,6 +295,11 @@ defmodule QuantokWeb.WorldLive do
     {:noreply, update(socket, :tokene_count, &max(&1 - 1, 0))}
   end
 
+  def handle_event("tokene_shattered", %{"tokene_id" => tid}, socket) do
+    World.remove_tokene(socket.assigns.world_pid, tid)
+    {:noreply, update(socket, :tokene_count, &max(&1 - 1, 0))}
+  end
+
   def handle_event("move_node", %{"node_id" => id, "x" => x, "y" => y}, socket) do
     World.update_node_position(socket.assigns.world_pid, id, {x * 1.0, y * 1.0})
     {:noreply, socket}
@@ -348,6 +353,7 @@ defmodule QuantokWeb.WorldLive do
           width: w,
           height: h,
           mass: Tokene.mass(t),
+          integrity: t.integrity,
           emit_rate: rate,
           created_at: t.created_at,
           decay: %{
@@ -407,7 +413,13 @@ defmodule QuantokWeb.WorldLive do
           encoding: to_string(t.encoding),
           width: w,
           height: h,
-          mass: Tokene.mass(t)
+          mass: Tokene.mass(t),
+          integrity: t.integrity,
+          decay: %{
+            enabled: t.decay.enabled,
+            half_life: if(t.decay.half_life == :infinite, do: 0, else: t.decay.half_life),
+            shatter: to_string(t.decay.shatter)
+          }
         }
       end)
 
