@@ -46,3 +46,6 @@ npm-debug.log
 
 # Claude Code memory (per-user)
 .claude/
+
+# Beads issue tracking (local)
+.beads/
