@@ -16,16 +16,23 @@ defmodule Quantok.Node.EmitterSourcesTest do
   end
 
   describe "File" do
-    test "reads existing file" do
-      path = Path.join(System.tmp_dir!(), "quantok_test_#{:rand.uniform(100_000)}.txt")
+    test "reads existing file in safe directory" do
+      safe_dir = Application.app_dir(:quantok, "priv/data")
+      Elixir.File.mkdir_p!(safe_dir)
+      filename = "quantok_test_#{:rand.uniform(100_000)}.txt"
+      path = Path.join(safe_dir, filename)
       Elixir.File.write!(path, "test content")
-      {:ok, result} = File.execute(path)
+      {:ok, result} = File.execute(filename)
       assert result == "test content"
       Elixir.File.rm!(path)
     end
 
+    test "rejects path traversal" do
+      {:error, :path_outside_safe_directory} = File.execute("../../etc/passwd")
+    end
+
     test "returns error for missing file" do
-      {:error, {:file_read, :enoent}} = File.execute("/nonexistent/path")
+      {:error, {:file_read, :enoent}} = File.execute("nonexistent.txt")
     end
   end
 

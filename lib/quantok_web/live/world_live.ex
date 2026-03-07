@@ -231,9 +231,12 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_event("load_world", %{"name" => name}, socket) do
+    # Prevent path traversal — only allow alphanumeric, underscore, hyphen
+    safe_name = name |> Path.basename() |> String.replace(~r/[^a-zA-Z0-9_\-]/, "")
+
     path =
       worlds_search_paths()
-      |> Enum.map(&Path.join(&1, "#{name}.json"))
+      |> Enum.map(&Path.join(&1, "#{safe_name}.json"))
       |> Enum.find(&File.exists?/1)
 
     if path do
