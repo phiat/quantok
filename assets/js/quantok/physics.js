@@ -14,8 +14,11 @@ export async function initRapier() {
     if (typeof args[0] === "string" && args[0].includes("deprecated parameters")) return;
     origWarn.apply(console, args);
   };
-  await RAPIER.init();
-  console.warn = origWarn;
+  try {
+    await RAPIER.init();
+  } finally {
+    console.warn = origWarn;
+  }
   return RAPIER;
 }
 

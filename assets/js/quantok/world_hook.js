@@ -45,18 +45,22 @@ const WorldCanvas = {
     this._menu.style.display = "none";
     this.el.parentElement.appendChild(this._menu);
 
-    // Mouse events
-    this.el.addEventListener("mousedown", (e) => this._onMouseDown(e));
-    this.el.addEventListener("mousemove", (e) => this._onMouseMove(e));
-    this.el.addEventListener("mouseup", () => this._onMouseUp());
-    this.el.addEventListener("mouseleave", () => { this._onMouseUp(); this._hideMenu(); });
+    // Mouse events (store refs for cleanup)
+    this._onMouseDownBound = (e) => this._onMouseDown(e);
+    this._onMouseMoveBound = (e) => this._onMouseMove(e);
+    this._onMouseUpBound = () => this._onMouseUp();
+    this._onMouseLeaveBound = () => { this._onMouseUp(); this._hideMenu(); };
+    this.el.addEventListener("mousedown", this._onMouseDownBound);
+    this.el.addEventListener("mousemove", this._onMouseMoveBound);
+    this.el.addEventListener("mouseup", this._onMouseUpBound);
+    this.el.addEventListener("mouseleave", this._onMouseLeaveBound);
 
     // Replay any events that arrived during init
     this._ready = true;
     for (const [type, data] of this._eventQueue) {
       this._handle(type, data);
     }
-    this._eventQueue = null;
+    this._eventQueue = [];
 
     // Start animation loop
     this.animate();
@@ -87,8 +91,13 @@ const WorldCanvas = {
 
   destroyed() {
     this.running = false;
+    if (this._rafId) cancelAnimationFrame(this._rafId);
     for (const t of this._pendingTimeouts) clearTimeout(t);
     this._pendingTimeouts = [];
+    this.el.removeEventListener("mousedown", this._onMouseDownBound);
+    this.el.removeEventListener("mousemove", this._onMouseMoveBound);
+    this.el.removeEventListener("mouseup", this._onMouseUpBound);
+    this.el.removeEventListener("mouseleave", this._onMouseLeaveBound);
     if (this._menu && this._menu.parentElement) this._menu.remove();
     this.worldRenderer.dispose();
   },
@@ -183,20 +192,17 @@ const WorldCanvas = {
     }
     actions.push({ label: "×", event: "remove_node", data: { node_id: nodeId } });
 
-    this._menu.innerHTML = actions
-      .map(a => `<button data-event="${a.event}" data-payload='${JSON.stringify(a.data)}'>${a.label}</button>`)
-      .join("");
-
-    // Wire up clicks
-    this._menu.querySelectorAll("button").forEach((btn) => {
+    this._menu.textContent = "";
+    for (const a of actions) {
+      const btn = document.createElement("button");
+      btn.textContent = a.label;
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
-        const evt = btn.dataset.event;
-        const payload = JSON.parse(btn.dataset.payload);
-        this.pushEvent(evt, payload);
+        this.pushEvent(a.event, a.data);
         this._hideMenu();
       });
-    });
+      this._menu.appendChild(btn);
+    }
 
     // Position above node
     const group = this.worldRenderer.nodeMeshes.get(nodeId);
@@ -233,8 +239,7 @@ const WorldCanvas = {
         // All tokenes drop from the same pipe outlet point
         this.physics.spawnTokene(t.id, baseX, baseY, hw, hh, t.mass);
         this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
-        t._spawnedAt = performance.now();
-        this.tokeneData.set(t.id, t);
+        this.tokeneData.set(t.id, { ...t, _spawnedAt: performance.now() });
       }, i * (t.emit_rate || 100));
       this._pendingTimeouts.push(timer);
     });
@@ -277,8 +282,7 @@ const WorldCanvas = {
       const xOff = (i - (fragments.length - 1) / 2) * spread;
       this.physics.spawnTokene(t.id, oldPos.x + xOff, oldPos.y, hw, hh, t.mass);
       this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
-      t._spawnedAt = performance.now();
-      this.tokeneData.set(t.id, t);
+      this.tokeneData.set(t.id, { ...t, _spawnedAt: performance.now() });
 
       // Explode: apply random impulse
       if (behavior === "explode") {
@@ -314,8 +318,7 @@ const WorldCanvas = {
       const xOff = (i - (new_tokenes.length - 1) / 2) * 10;
       this.physics.spawnTokene(t.id, oldPos.x + xOff, oldPos.y, hw, hh, t.mass);
       this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
-      t._spawnedAt = performance.now();
-      this.tokeneData.set(t.id, t);
+      this.tokeneData.set(t.id, { ...t, _spawnedAt: performance.now() });
     });
   },
 
@@ -427,7 +430,7 @@ const WorldCanvas = {
     // Render
     this.worldRenderer.render();
 
-    requestAnimationFrame(() => this.animate());
+    this._rafId = requestAnimationFrame(() => this.animate());
   },
 
   checkSensorIntersections() {
@@ -447,7 +450,8 @@ const WorldCanvas = {
 
         cooldownSet.add(tokeneId);
         const cooldownMs = nodeInfo.type === "transformer" ? 1000 : 500;
-        setTimeout(() => cooldownSet.delete(tokeneId), cooldownMs);
+        const tid = setTimeout(() => cooldownSet.delete(tokeneId), cooldownMs);
+        this._pendingTimeouts.push(tid);
 
         if (nodeInfo.type === "collector") {
           this.pushEvent("tokene_near_collector", {

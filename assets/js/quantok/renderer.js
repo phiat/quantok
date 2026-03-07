@@ -19,7 +19,6 @@ export class WorldRenderer {
     this.canvas = canvas;
     this.meshes = new Map();       // id -> THREE.Group (tokene bg + text)
     this.nodeMeshes = new Map();   // id -> THREE.Group (node)
-    this.textureCache = new Map(); // key -> THREE.Texture (for node labels only)
 
     // Scene
     this.scene = new THREE.Scene();
@@ -314,15 +313,15 @@ export class WorldRenderer {
     if (!bgMesh) return;
 
     // Desaturate: lerp from base color toward grey as integrity drops
-    const { r, g, b } = lerpColor(0x555555, baseColor, integrityRatio);
+    const { r, g, b } = lerpColor(baseColor, 0x555555, integrityRatio);
     bgMesh.material.color.setRGB(r, g, b);
 
     // Opacity: fade as integrity drops
     if (!bgMesh.material.transparent) bgMesh.material.transparent = true;
-    bgMesh.material.opacity = 0.3 + t * 0.7;
+    bgMesh.material.opacity = 0.3 + integrityRatio * 0.7;
 
     // Pulse when near death (integrity < 15%)
-    if (t < 0.15 && t > 0) {
+    if (integrityRatio < 0.15 && integrityRatio > 0) {
       const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.01);
       bgMesh.material.opacity *= 0.4 + pulse * 0.6;
     }
@@ -439,40 +438,6 @@ export class WorldRenderer {
     this._updateCamera();
   }
 
-  // --- Legacy texture method (kept for compatibility if needed) ---
-
-  /** Create or get cached text texture */
-  getTextTexture(text, width, height, color) {
-    const key = `${text}_${width}_${height}_${color}`;
-    if (this.textureCache.has(key)) return this.textureCache.get(key);
-
-    const canvas = document.createElement("canvas");
-    const scale = 2;
-    canvas.width = Math.max(width * scale, 4);
-    canvas.height = Math.max(height * scale, 4);
-
-    const ctx = canvas.getContext("2d");
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const hex = "#" + (color & 0xffffff).toString(16).padStart(6, "0");
-    ctx.fillStyle = hex;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const fontSize = Math.min(canvas.height * 0.85, canvas.width / (text.length * 0.52));
-    ctx.fillStyle = "#001b2e";
-    ctx.font = `bold ${Math.max(fontSize, 8)}px monospace`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    const displayText = text.length > 12 ? text.slice(0, 11) + "\u2026" : text;
-    ctx.fillText(displayText, canvas.width / 2, canvas.height / 2);
-
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.minFilter = THREE.LinearFilter;
-    this.textureCache.set(key, texture);
-    return texture;
-  }
-
   /** Clean up all GPU resources */
   dispose() {
     window.removeEventListener("resize", this._onResize);
@@ -503,9 +468,6 @@ export class WorldRenderer {
       });
     });
     this.nodeMeshes.clear();
-    // Dispose cached textures
-    this.textureCache.forEach((t) => t.dispose());
-    this.textureCache.clear();
     // Dispose composer + renderer
     if (this._useComposer) this.composer.dispose();
     this.renderer.dispose();
