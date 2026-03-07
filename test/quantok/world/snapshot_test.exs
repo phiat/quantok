@@ -118,4 +118,22 @@ defmodule Quantok.World.SnapshotTest do
 
     File.rm_rf!(dir)
   end
+
+  test "snapshot preserves paired_emitter_id", %{pid: pid} do
+    emitter = Emitter.new(command: "echo test", label: "source")
+    collector = Collector.new(
+      output_mode: :paired,
+      paired_emitter_id: "fake-emitter-id",
+      label: "paired collector"
+    )
+
+    World.add_node(pid, emitter)
+    World.add_node(pid, collector)
+
+    world = World.get_state(pid)
+    {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
+
+    collector_node = Enum.find(decoded["nodes"], &(&1["label"] == "paired collector"))
+    assert collector_node["config"]["paired_emitter_id"] == "fake-emitter-id"
+  end
 end

@@ -174,8 +174,15 @@ defmodule Quantok.World.Snapshot do
       "output_mode" => to_string(config.output_mode)
     }
 
-    if config.output_chunker do
-      Map.put(base, "output_chunker", module_to_string(config.output_chunker))
+    base =
+      if config.output_chunker do
+        Map.put(base, "output_chunker", module_to_string(config.output_chunker))
+      else
+        base
+      end
+
+    if config.paired_emitter_id do
+      Map.put(base, "paired_emitter_id", config.paired_emitter_id)
     else
       base
     end
@@ -250,7 +257,7 @@ defmodule Quantok.World.Snapshot do
       do: string_to_module(config["output_chunker"], :chunker),
       else: nil
 
-    Collector.new(
+    opts = [
       capacity: config["capacity"] || 8,
       trigger_mode: safe_trigger_mode(config["trigger_mode"]),
       tick_interval: config["tick_interval"] || 120,
@@ -260,7 +267,16 @@ defmodule Quantok.World.Snapshot do
       output_chunker: output_chunker,
       position: deserialize_position(data["position"]),
       label: data["label"] || "Collector"
-    )
+    ]
+
+    opts =
+      if config["paired_emitter_id"] do
+        Keyword.put(opts, :paired_emitter_id, config["paired_emitter_id"])
+      else
+        opts
+      end
+
+    Collector.new(opts)
   end
 
   defp deserialize_node(%{"type" => "transformer"} = data) do

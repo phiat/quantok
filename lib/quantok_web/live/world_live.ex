@@ -86,6 +86,7 @@ defmodule QuantokWeb.WorldLive do
           <button phx-click="add_timed_collector" phx-value-capacity="8" phx-value-interval="120" class="q-btn q-btn--collect">timed · 4s</button>
           <button phx-click="add_emit_collector" phx-value-action="reverse" phx-value-capacity="4" phx-value-chunker="word" class="q-btn q-btn--collect">reverse · emit</button>
           <button phx-click="add_emit_collector" phx-value-action="upcase" phx-value-capacity="4" phx-value-chunker="word" class="q-btn q-btn--collect">upcase · emit</button>
+          <button phx-click="add_paired_collector" class="q-btn q-btn--collect">paired · emit</button>
 
           <div class="q-section">Transformers</div>
           <button phx-click="add_transformer" phx-value-effect="splitter" class="q-btn q-btn--transform">splitter</button>
@@ -229,6 +230,42 @@ defmodule QuantokWeb.WorldLive do
 
     {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
     {:noreply, socket |> push_node(collector) |> update(:node_count, &(&1 + 1))}
+  end
+
+  def handle_event("add_paired_collector", _params, socket) do
+    {x, socket} = next_x(socket)
+
+    # Create a Manual emitter at a lower position
+    emitter =
+      Emitter.new(
+        source: Quantok.Node.Emitter.Manual,
+        command: "",
+        chunker: Quantok.Chunker.Byte,
+        position: {x, -200.0},
+        label: "Paired source"
+      )
+
+    # Create a paired collector above it
+    collector =
+      Collector.new(
+        capacity: 4,
+        output_mode: :paired,
+        paired_emitter_id: emitter.id,
+        action: Collector.Echo,
+        position: {x, -50.0},
+        label: "Paired collector"
+      )
+
+    {:ok, _} = World.add_node(socket.assigns.world_pid, emitter)
+    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
+
+    socket =
+      socket
+      |> push_node(emitter)
+      |> push_node(collector)
+      |> update(:node_count, &(&1 + 2))
+
+    {:noreply, socket}
   end
 
   def handle_event("add_transformer", %{"effect" => effect}, socket) do

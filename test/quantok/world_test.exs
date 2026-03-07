@@ -315,6 +315,75 @@ defmodule Quantok.WorldTest do
     end
   end
 
+  describe "emitter pairing" do
+    test "pair_nodes sets paired_emitter_id on collector", %{world: w} do
+      emitter = manual_emitter("test")
+      collector = Collector.new(output_mode: :paired)
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, _} = World.add_node(w, collector)
+
+      {:ok, updated} = World.pair_nodes(w, collector.id, emitter.id)
+      assert updated.config.paired_emitter_id == emitter.id
+
+      state = World.get_state(w)
+      assert state.nodes[collector.id].config.paired_emitter_id == emitter.id
+    end
+
+    test "pair_nodes returns error when collector not found", %{world: w} do
+      emitter = manual_emitter("test")
+      {:ok, _} = World.add_node(w, emitter)
+
+      assert {:error, :not_found} = World.pair_nodes(w, "fake-id", emitter.id)
+    end
+
+    test "pair_nodes returns error when emitter not found", %{world: w} do
+      collector = Collector.new(output_mode: :paired)
+      {:ok, _} = World.add_node(w, collector)
+
+      assert {:error, :not_found} = World.pair_nodes(w, collector.id, "fake-id")
+    end
+
+    test "triggering paired collector fires paired emitter", %{world: w} do
+      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "", chunker: Quantok.Chunker.Byte)
+      collector = Collector.new(
+        output_mode: :paired,
+        paired_emitter_id: emitter.id,
+        action: Quantok.Node.Collector.Reverse,
+        trigger_mode: :manual
+      )
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, _} = World.add_node(w, collector)
+
+      fill_collector(w, collector.id, "abc", chunker: Quantok.Chunker.Word)
+      {:ok, output} = World.trigger_collector(w, collector.id)
+
+      assert output == "cba"
+
+      state = World.get_state(w)
+      values = state.tokenes |> Map.values() |> Enum.map(& &1.value) |> Enum.sort()
+      assert values == ["a", "b", "c"]
+    end
+
+    test "paired emitter tokenes have paired emitter as source_id", %{world: w} do
+      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "", chunker: Quantok.Chunker.Byte)
+      collector = Collector.new(
+        output_mode: :paired,
+        paired_emitter_id: emitter.id,
+        action: Quantok.Node.Collector.Echo,
+        trigger_mode: :manual
+      )
+      {:ok, _} = World.add_node(w, emitter)
+      {:ok, _} = World.add_node(w, collector)
+
+      fill_collector(w, collector.id, "hi", chunker: Quantok.Chunker.Word)
+      {:ok, _output} = World.trigger_collector(w, collector.id)
+
+      state = World.get_state(w)
+      emitted = Map.values(state.tokenes)
+      assert Enum.all?(emitted, &(&1.source_id == emitter.id))
+    end
+  end
+
   describe "pubsub events" do
     test "emitter fire broadcasts event", %{world: w} do
       state = World.get_state(w)

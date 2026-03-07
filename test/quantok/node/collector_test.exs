@@ -117,6 +117,28 @@ defmodule Quantok.Node.CollectorTest do
     end
   end
 
+  describe "trigger/1 with paired mode" do
+    test "returns paired tuple when output_mode is :paired with paired_emitter_id" do
+      node = Collector.new(
+        output_mode: :paired,
+        paired_emitter_id: "emitter-123",
+        action: Quantok.Node.Collector.Reverse
+      )
+      {:ok, node} = Collector.absorb(node, Tokene.new("hello", :word))
+      {:paired, output, cleared, emitter_id} = Collector.trigger(node)
+
+      assert output == "olleh"
+      assert emitter_id == "emitter-123"
+      assert Collector.buffer_count(cleared) == 0
+    end
+
+    test "returns 3-tuple when paired_emitter_id is not set" do
+      node = Collector.new(output_mode: :paired)
+      {:ok, node} = Collector.absorb(node, Tokene.new("test", :word))
+      {:ok, _output, _cleared} = Collector.trigger(node)
+    end
+  end
+
   describe "full?/1" do
     test "false when buffer has space" do
       node = Collector.new(capacity: 5)

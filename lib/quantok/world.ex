@@ -91,6 +91,9 @@ defmodule Quantok.World do
 
   def fire_all_emitters(server), do: GenServer.call(server, :fire_all_emitters)
 
+  def pair_nodes(server, collector_id, emitter_id),
+    do: GenServer.call(server, {:pair_nodes, collector_id, emitter_id})
+
   # --- Server Callbacks ---
 
   @impl true
@@ -181,6 +184,18 @@ defmodule Quantok.World do
       end)
 
     {:reply, {:ok, all_tokenes}, {world, events}}
+  end
+
+  def handle_call({:pair_nodes, collector_id, emitter_id}, _from, {world, events}) do
+    with %Node{type: :collector, config: coll_config} = collector <- Map.get(world.nodes, collector_id),
+         %Node{type: :emitter} <- Map.get(world.nodes, emitter_id) do
+      updated_collector = %{collector | config: %{coll_config | paired_emitter_id: emitter_id}}
+      event = {:node_updated, updated_collector, now()}
+      world = Event.apply(world, event)
+      {:reply, {:ok, updated_collector}, {world, [event | events]}}
+    else
+      _ -> {:reply, {:error, :not_found}, {world, events}}
+    end
   end
 
   def handle_call({:absorb_tokene, collector_id, tokene_id}, _from, {world, events}) do
@@ -331,7 +346,7 @@ defmodule Quantok.World do
   defp maybe_auto_trigger(world, events, :full, %{config: %{trigger_mode: :on_full}}, collector_id) do
     case Map.get(world.nodes, collector_id) do
       %Node{type: :collector} = collector ->
-        {world, events, _output} = do_trigger(world, events, collector_id, collector)
+        {world, events, _output} = do_trigger(world, events, collector_id, collector, 0)
         {world, events}
 
       _ ->
@@ -341,8 +356,9 @@ defmodule Quantok.World do
 
   defp maybe_auto_trigger(world, events, _status, _collector, _collector_id), do: {world, events}
 
-  # Shared trigger logic: handles both :discard and :emit output modes
-  defp do_trigger(world, events, collector_id, collector) do
+  # Shared trigger logic: handles :discard, :emit, and :paired output modes
+  # depth: feedback loop safety counter (max 3 chained paired triggers)
+  defp do_trigger(world, events, collector_id, collector, depth \\ 0) do
     case Collector.trigger(collector) do
       {:ok, output, cleared, emitted_tokenes} ->
         # :emit mode — trigger + emit new tokenes
@@ -354,8 +370,58 @@ defmodule Quantok.World do
         broadcast(world, {:emit, collector_id, emitted_tokenes})
         {world, [emit_event, event | events], output}
 
+      {:paired, output, cleared, paired_emitter_id} ->
+        # :paired mode — send output to paired emitter and fire it
+        handle_paired_trigger(world, events, collector_id, output, cleared, paired_emitter_id, depth)
+
       {:ok, output, cleared} ->
         # :discard mode — trigger only
+        event = {:triggered, collector_id, output, cleared, now()}
+        world = Event.apply(world, event)
+        broadcast(world, {:trigger, collector_id, output})
+        {world, [event | events], output}
+    end
+  end
+
+  # Handle paired trigger: fire paired emitter with collector output as command
+  defp handle_paired_trigger(world, events, collector_id, output, cleared, paired_emitter_id, depth) do
+    if depth >= 3 do
+      # Depth guard: max 3 chained paired triggers
+      event = {:triggered, collector_id, output, cleared, now()}
+      world = Event.apply(world, event)
+      broadcast(world, {:trigger, collector_id, output})
+      {world, [event | events], output}
+    else
+      fire_paired_emitter(world, events, collector_id, output, cleared, paired_emitter_id)
+    end
+  end
+
+  # Fire the paired emitter with the collector's output as its command
+  defp fire_paired_emitter(world, events, collector_id, output, cleared, paired_emitter_id) do
+    case Map.get(world.nodes, paired_emitter_id) do
+      %Node{type: :emitter, config: emitter_config} = paired_emitter ->
+        updated_emitter = %{paired_emitter | config: %{emitter_config | command: output}}
+        world = Event.apply(world, {:node_updated, updated_emitter, now()})
+
+        case Emitter.fire(updated_emitter, Map.get(world.environment, :decay, %{})) do
+          {:ok, emitted_tokenes} ->
+            trig_event = {:triggered, collector_id, output, cleared, now()}
+            world = Event.apply(world, trig_event)
+            emit_event = {:emitted, paired_emitter_id, emitted_tokenes, now()}
+            world = Event.apply(world, emit_event)
+            broadcast(world, {:trigger, collector_id, output})
+            broadcast(world, {:emit, paired_emitter_id, emitted_tokenes})
+            {world, [emit_event, trig_event | events], output}
+
+          {:error, _reason} ->
+            event = {:triggered, collector_id, output, cleared, now()}
+            world = Event.apply(world, event)
+            broadcast(world, {:trigger, collector_id, output})
+            {world, [event | events], output}
+        end
+
+      _ ->
+        # Paired emitter not found, fall back to just trigger
         event = {:triggered, collector_id, output, cleared, now()}
         world = Event.apply(world, event)
         broadcast(world, {:trigger, collector_id, output})
