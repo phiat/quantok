@@ -28,12 +28,15 @@ defmodule Quantok.Node.Transformer do
   """
   @spec new(effect(), keyword()) :: Node.t()
   def new(effect, opts \\ []) do
+    pattern = Keyword.get(opts, :pattern, nil)
+
     config = %{
       effect: effect,
       radius: Keyword.get(opts, :radius, 50.0),
       strength: Keyword.get(opts, :strength, 0.5),
       target_encoding: Keyword.get(opts, :target_encoding, nil),
-      pattern: Keyword.get(opts, :pattern, nil),
+      pattern: pattern,
+      compiled_pattern: compile_pattern(pattern),
       color: Keyword.get(opts, :color, nil)
     }
 
@@ -75,14 +78,11 @@ defmodule Quantok.Node.Transformer do
     [%{tokene | integrity: new_integrity}]
   end
 
-  def apply_effect(%Node{config: %{effect: :filter, pattern: pattern}}, tokene) do
-    case pattern && Regex.compile(pattern) do
-      {:ok, regex} ->
-        if Regex.match?(regex, tokene.value), do: [tokene], else: []
-      _ ->
-        [tokene]
-    end
+  def apply_effect(%Node{config: %{effect: :filter, compiled_pattern: %Regex{} = regex}}, tokene) do
+    if Regex.match?(regex, tokene.value), do: [tokene], else: []
   end
+
+  def apply_effect(%Node{config: %{effect: :filter}}, tokene), do: [tokene]
 
   def apply_effect(%Node{config: %{effect: :duplicator}}, tokene) do
     copy = Tokene.new(tokene.value, tokene.encoding, tokene.source_id)
@@ -102,6 +102,15 @@ defmodule Quantok.Node.Transformer do
   defp chunker_for_encoding(:phrase), do: Quantok.Chunker.Phrase
   defp chunker_for_encoding(:sentence), do: Quantok.Chunker.Sentence
   defp chunker_for_encoding(_), do: Quantok.Chunker.Byte
+
+  defp compile_pattern(nil), do: nil
+
+  defp compile_pattern(pattern) when is_binary(pattern) do
+    case Regex.compile(pattern) do
+      {:ok, regex} -> regex
+      {:error, _} -> nil
+    end
+  end
 
   defp transformer_label(:splitter), do: "Splitter"
   defp transformer_label(:crusher), do: "Crusher"

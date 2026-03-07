@@ -31,7 +31,7 @@ defmodule QuantokWeb.WorldLive do
       |> assign(:world_id, world.id)
       |> assign(:paused, false)
       |> assign(:tokene_count, 0)
-      |> assign(:node_count, 2)
+      |> assign(:node_count, 3)
       |> assign(:saved_worlds, list_saved_worlds())
       |> assign(:world_name, "Sandbox")
       |> assign(:decay_enabled, false)
@@ -253,20 +253,12 @@ defmodule QuantokWeb.WorldLive do
         {x, socket} = next_x(socket)
         passive = Passive.new(shape_atom, position: {x, 100.0})
         {:ok, _} = World.add_node(socket.assigns.world_pid, passive)
-        {:noreply, socket |> push_node(passive)}
+        {:noreply, socket |> push_node(passive) |> update(:node_count, &(&1 + 1))}
     end
   end
 
   def handle_event("fire_all", _params, socket) do
-    world = World.get_state(socket.assigns.world_pid)
-
-    world.nodes
-    |> Map.values()
-    |> Enum.filter(&(&1.type == :emitter))
-    |> Enum.each(fn emitter ->
-      World.fire_emitter(socket.assigns.world_pid, emitter.id)
-    end)
-
+    World.fire_all_emitters(socket.assigns.world_pid)
     {:noreply, socket}
   end
 
@@ -374,8 +366,7 @@ defmodule QuantokWeb.WorldLive do
     node = Map.get(world.nodes, id)
     World.remove_node(socket.assigns.world_pid, id)
 
-    is_passive = match?(%{type: :passive}, node)
-    count_delta = if is_passive or is_nil(node), do: 0, else: -1
+    count_delta = if is_nil(node), do: 0, else: -1
     {:noreply, update(socket, :node_count, &max(&1 + count_delta, 0))}
   end
 

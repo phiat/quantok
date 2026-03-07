@@ -87,6 +87,18 @@ defmodule Quantok.Node.TransformerTest do
 
       assert [] = Transformer.apply_effect(node, tokene)
     end
+
+    test "invalid regex pattern passes all tokenes through" do
+      node = Transformer.new(:filter, pattern: "[invalid")
+      tokene = Tokene.new("hello", :word)
+
+      assert [^tokene] = Transformer.apply_effect(node, tokene)
+    end
+
+    test "compiled regex is stored in config" do
+      node = Transformer.new(:filter, pattern: "^h")
+      assert %Regex{} = node.config.compiled_pattern
+    end
   end
 
   describe "duplicator" do

@@ -302,6 +302,27 @@ defmodule Quantok.WorldTest do
     end
   end
 
+  describe "fire_all_emitters" do
+    test "fires all emitters in single call", %{world: w} do
+      e1 = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "a", chunker: Quantok.Chunker.Byte)
+      e2 = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "b", chunker: Quantok.Chunker.Byte)
+      {:ok, _} = World.add_node(w, e1)
+      {:ok, _} = World.add_node(w, e2)
+
+      {:ok, tokenes} = World.fire_all_emitters(w)
+      values = Enum.map(tokenes, & &1.value) |> Enum.sort()
+      assert values == ["a", "b"]
+
+      state = World.get_state(w)
+      assert map_size(state.tokenes) == 2
+    end
+
+    test "returns empty list when no emitters", %{world: w} do
+      {:ok, tokenes} = World.fire_all_emitters(w)
+      assert tokenes == []
+    end
+  end
+
   describe "pubsub events" do
     test "emitter fire broadcasts event", %{world: w} do
       state = World.get_state(w)

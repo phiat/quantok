@@ -89,6 +89,8 @@ defmodule Quantok.World do
 
   def tick(server), do: GenServer.cast(server, :tick)
 
+  def fire_all_emitters(server), do: GenServer.call(server, :fire_all_emitters)
+
   # --- Server Callbacks ---
 
   @impl true
@@ -156,6 +158,29 @@ defmodule Quantok.World do
       nil -> {:reply, {:error, :not_found}, {world, events}}
       {:error, reason} -> {:reply, {:error, reason}, {world, events}}
     end
+  end
+
+  def handle_call(:fire_all_emitters, _from, {world, events}) do
+    decay = Map.get(world.environment, :decay, %{})
+
+    {all_tokenes, world, events} =
+      world.nodes
+      |> Map.values()
+      |> Enum.filter(&(&1.type == :emitter))
+      |> Enum.reduce({[], world, events}, fn node, {acc, w, evts} ->
+        case Emitter.fire(node, decay) do
+          {:ok, tokenes} ->
+            event = {:emitted, node.id, tokenes, now()}
+            w = Event.apply(w, event)
+            broadcast(w, {:emit, node.id, tokenes})
+            {tokenes ++ acc, w, [event | evts]}
+
+          {:error, _} ->
+            {acc, w, evts}
+        end
+      end)
+
+    {:reply, {:ok, all_tokenes}, {world, events}}
   end
 
   def handle_call({:absorb_tokene, collector_id, tokene_id}, _from, {world, events}) do
