@@ -15,7 +15,7 @@ defmodule Quantok.Node.CollectorActionsTest do
     end
 
     test "handles unicode" do
-      assert Reverse.process("", "abc") == "cba"
+      assert Reverse.process("", "héllo") == "olléh"
     end
   end
 

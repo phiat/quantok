@@ -1,6 +1,8 @@
 defmodule Quantok.WorldTest do
   use ExUnit.Case, async: true
 
+  import Quantok.WorldHelpers
+
   alias Quantok.Node.{Collector, Emitter, Transformer}
   alias Quantok.World
 
@@ -53,9 +55,8 @@ defmodule Quantok.WorldTest do
 
   describe "emitter firing" do
     test "fire emitter creates tokenes in world", %{world: w} do
-      emitter = Emitter.new(command: "echo hello world", chunker: Quantok.Chunker.Word)
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, tokenes} = World.fire_emitter(w, emitter.id)
+      emitter = manual_emitter("hello world", chunker: Quantok.Chunker.Word)
+      tokenes = fire_into(w, emitter)
 
       assert length(tokenes) == 2
       state = World.get_state(w)
@@ -69,19 +70,16 @@ defmodule Quantok.WorldTest do
 
   describe "collector absorption" do
     test "absorb tokene into collector", %{world: w} do
-      emitter = Emitter.new(command: "echo test", chunker: Quantok.Chunker.Word)
       collector = Collector.new(capacity: 5)
-
-      {:ok, _} = World.add_node(w, emitter)
       {:ok, _} = World.add_node(w, collector)
-      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
+
+      emitter = manual_emitter("test", chunker: Quantok.Chunker.Word)
+      [tokene] = fire_into(w, emitter)
 
       {:ok, :ok} = World.absorb_tokene(w, collector.id, tokene.id)
 
       state = World.get_state(w)
-      # Tokene removed from world
       refute Map.has_key?(state.tokenes, tokene.id)
-      # Tokene in collector buffer
       collector_state = state.nodes[collector.id]
       assert length(collector_state.config.buffer) == 1
     end
@@ -90,19 +88,25 @@ defmodule Quantok.WorldTest do
       collector = Collector.new(capacity: 1, trigger_mode: :on_full)
       {:ok, _} = World.add_node(w, collector)
 
-      emitter =
-        Emitter.new(
-          source: Quantok.Node.Emitter.Manual,
-          command: "x",
-          chunker: Quantok.Chunker.Byte
-        )
-
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
+      emitter = manual_emitter("x")
+      [tokene] = fire_into(w, emitter)
 
       {:ok, :full} = World.absorb_tokene(w, collector.id, tokene.id)
 
-      # Buffer should be cleared after auto-trigger
+      state = World.get_state(w)
+      assert state.nodes[collector.id].config.buffer == []
+    end
+
+    test "absorb into full collector triggers and clears", %{world: w} do
+      collector = Collector.new(capacity: 2, trigger_mode: :on_full)
+      {:ok, _} = World.add_node(w, collector)
+
+      emitter = manual_emitter("ab")
+      [t1, t2] = fire_into(w, emitter)
+
+      {:ok, :ok} = World.absorb_tokene(w, collector.id, t1.id)
+      {:ok, :full} = World.absorb_tokene(w, collector.id, t2.id)
+
       state = World.get_state(w)
       assert state.nodes[collector.id].config.buffer == []
     end
@@ -113,21 +117,13 @@ defmodule Quantok.WorldTest do
       transformer = Transformer.new(:duplicator)
       {:ok, _} = World.add_node(w, transformer)
 
-      emitter =
-        Emitter.new(
-          source: Quantok.Node.Emitter.Manual,
-          command: "hi",
-          chunker: Quantok.Chunker.Word
-        )
-
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
+      emitter = manual_emitter("hi", chunker: Quantok.Chunker.Word)
+      [tokene] = fire_into(w, emitter)
 
       {:ok, result} = World.apply_transformer(w, transformer.id, tokene.id)
       assert length(result) == 2
 
       state = World.get_state(w)
-      # Duplicator keeps original + adds copy
       assert map_size(state.tokenes) == 2
       assert Enum.all?(Map.values(state.tokenes), &(&1.value == "hi"))
     end
@@ -137,17 +133,7 @@ defmodule Quantok.WorldTest do
     test "manual trigger returns output", %{world: w} do
       collector = Collector.new(trigger_mode: :manual)
       {:ok, _} = World.add_node(w, collector)
-
-      emitter =
-        Emitter.new(
-          source: Quantok.Node.Emitter.Manual,
-          command: "hello",
-          chunker: Quantok.Chunker.Word
-        )
-
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
-      {:ok, :ok} = World.absorb_tokene(w, collector.id, tokene.id)
+      fill_collector(w, collector.id, "hello", chunker: Quantok.Chunker.Word)
 
       {:ok, output} = World.trigger_collector(w, collector.id)
       assert output == "hello"
@@ -159,15 +145,8 @@ defmodule Quantok.WorldTest do
 
   describe "tokene removal" do
     test "remove offscreen tokene", %{world: w} do
-      emitter =
-        Emitter.new(
-          source: Quantok.Node.Emitter.Manual,
-          command: "x",
-          chunker: Quantok.Chunker.Byte
-        )
-
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
+      emitter = manual_emitter("x")
+      [tokene] = fire_into(w, emitter)
 
       :ok = World.remove_tokene(w, tokene.id)
       state = World.get_state(w)
@@ -193,9 +172,8 @@ defmodule Quantok.WorldTest do
 
   describe "event sourcing" do
     test "events are recorded", %{world: w} do
-      emitter = Emitter.new(command: "echo test", chunker: Quantok.Chunker.Word)
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, _} = World.fire_emitter(w, emitter.id)
+      emitter = manual_emitter("test", chunker: Quantok.Chunker.Word)
+      fire_into(w, emitter)
 
       events = World.get_events(w)
       types = Enum.map(events, &elem(&1, 0))
@@ -204,9 +182,8 @@ defmodule Quantok.WorldTest do
     end
 
     test "events can be filtered by type", %{world: w} do
-      emitter = Emitter.new(command: "echo test", chunker: Quantok.Chunker.Word)
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, _} = World.fire_emitter(w, emitter.id)
+      emitter = manual_emitter("test", chunker: Quantok.Chunker.Word)
+      fire_into(w, emitter)
 
       events = World.get_events(w, types: [:emitted])
       assert length(events) == 1
@@ -225,7 +202,6 @@ defmodule Quantok.WorldTest do
       events = World.get_events(w)
       actual_state = World.get_state(w)
 
-      # Replay events from scratch
       rebuilt =
         Enum.reduce(events, %Quantok.World{id: actual_state.id, name: actual_state.name}, fn event, acc ->
           Event.apply(acc, event)
@@ -241,8 +217,7 @@ defmodule Quantok.WorldTest do
   describe "tick" do
     test "tick increments tick_count", %{world: w} do
       World.tick(w)
-      # cast is async, give it a moment
-      Process.sleep(10)
+      sync(w)
       state = World.get_state(w)
       assert state.tick_count == 1
     end
@@ -250,7 +225,7 @@ defmodule Quantok.WorldTest do
     test "tick does nothing when paused", %{world: w} do
       World.pause(w)
       World.tick(w)
-      Process.sleep(10)
+      sync(w)
       state = World.get_state(w)
       assert state.tick_count == 0
     end
@@ -258,21 +233,25 @@ defmodule Quantok.WorldTest do
     test "timed collector triggers after enough ticks", %{world: w} do
       collector = Collector.new(trigger_mode: :timed, tick_interval: 3, capacity: 8)
       {:ok, _} = World.add_node(w, collector)
+      fill_collector(w, collector.id, "x")
 
-      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "x", chunker: Quantok.Chunker.Byte)
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
-      {:ok, :ok} = World.absorb_tokene(w, collector.id, tokene.id)
-
-      # Tick 3 times to hit the interval
-      Enum.each(1..3, fn _ ->
-        World.tick(w)
-        Process.sleep(5)
-      end)
-      Process.sleep(10)
+      Enum.each(1..3, fn _ -> World.tick(w) end)
+      sync(w)
 
       state = World.get_state(w)
       assert state.nodes[collector.id].config.buffer == []
+    end
+
+    test "timed collector resets ticks_since_trigger after trigger", %{world: w} do
+      collector = Collector.new(trigger_mode: :timed, tick_interval: 2, capacity: 8)
+      {:ok, _} = World.add_node(w, collector)
+      fill_collector(w, collector.id, "x")
+
+      Enum.each(1..2, fn _ -> World.tick(w) end)
+      sync(w)
+
+      state = World.get_state(w)
+      assert state.nodes[collector.id].config.ticks_since_trigger == 0
     end
   end
 
@@ -286,26 +265,39 @@ defmodule Quantok.WorldTest do
         output_chunker: Quantok.Chunker.Byte
       )
       {:ok, _} = World.add_node(w, collector)
-
-      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "abc", chunker: Quantok.Chunker.Word)
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, [tokene]} = World.fire_emitter(w, emitter.id)
-      {:ok, :ok} = World.absorb_tokene(w, collector.id, tokene.id)
+      fill_collector(w, collector.id, "abc", chunker: Quantok.Chunker.Word)
 
       {:ok, output} = World.trigger_collector(w, collector.id)
       assert output == "cba"
 
       state = World.get_state(w)
-      # Reverse of "abc" = "cba", chunked by byte = ["c", "b", "a"]
       values = state.tokenes |> Map.values() |> Enum.map(& &1.value) |> Enum.sort()
       assert values == ["a", "b", "c"]
+    end
+
+    test "emitted tokenes have collector as source_id", %{world: w} do
+      collector = Collector.new(
+        capacity: 8,
+        trigger_mode: :manual,
+        action: Quantok.Node.Collector.Echo,
+        output_mode: :emit,
+        output_chunker: Quantok.Chunker.Byte
+      )
+      {:ok, _} = World.add_node(w, collector)
+      fill_collector(w, collector.id, "hi", chunker: Quantok.Chunker.Word)
+
+      {:ok, _output} = World.trigger_collector(w, collector.id)
+
+      state = World.get_state(w)
+      emitted = Map.values(state.tokenes)
+      assert Enum.all?(emitted, &(&1.source_id == collector.id))
     end
   end
 
   describe "fire_all_emitters" do
     test "fires all emitters in single call", %{world: w} do
-      e1 = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "a", chunker: Quantok.Chunker.Byte)
-      e2 = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "b", chunker: Quantok.Chunker.Byte)
+      e1 = manual_emitter("a")
+      e2 = manual_emitter("b")
       {:ok, _} = World.add_node(w, e1)
       {:ok, _} = World.add_node(w, e2)
 
@@ -328,16 +320,9 @@ defmodule Quantok.WorldTest do
       state = World.get_state(w)
       Phoenix.PubSub.subscribe(Quantok.PubSub, "world:#{state.id}")
 
-      emitter =
-        Emitter.new(
-          source: Quantok.Node.Emitter.Manual,
-          command: "test",
-          chunker: Quantok.Chunker.Word
-        )
-
+      emitter = manual_emitter("test", chunker: Quantok.Chunker.Word)
       {:ok, _} = World.add_node(w, emitter)
 
-      # Flush the :node_added message
       assert_receive {:node_added, _}
 
       {:ok, _tokenes} = World.fire_emitter(w, emitter.id)

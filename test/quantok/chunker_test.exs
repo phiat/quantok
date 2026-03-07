@@ -169,6 +169,8 @@ defmodule Quantok.ChunkerTest do
 
           if input == "" do
             assert chunks == []
+          else
+            assert chunks != [], "#{inspect(unquote(mod))} returned empty for #{inspect(input)}"
           end
         end
       end

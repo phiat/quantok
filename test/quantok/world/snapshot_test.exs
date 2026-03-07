@@ -100,8 +100,7 @@ defmodule Quantok.World.SnapshotTest do
     File.rm!(path)
   end
 
-  test "rejects unsupported version" do
-    {:ok, pid} = World.start_link(world_name: "v99")
+  test "rejects unsupported version", %{pid: pid} do
     result = Snapshot.load_into(pid, %{"version" => 99})
     assert {:error, {:unsupported_version, 99}} = result
   end
