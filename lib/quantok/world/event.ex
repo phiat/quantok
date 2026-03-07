@@ -10,11 +10,15 @@ defmodule Quantok.World.Event do
           | {:node_moved, node_id :: binary(), position :: {float(), float()}, timestamp :: integer()}
           | {:node_updated, node :: Quantok.Node.t(), timestamp :: integer()}
           | {:emitted, emitter_id :: binary(), tokenes :: [Quantok.Tokene.t()], timestamp :: integer()}
-          | {:absorbed, collector_id :: binary(), tokene_id :: binary(), updated_collector :: Quantok.Node.t(), timestamp :: integer()}
-          | {:triggered, collector_id :: binary(), output :: binary(), cleared_collector :: Quantok.Node.t(), timestamp :: integer()}
-          | {:transformed, transformer_id :: binary(), old_tokene_id :: binary(), new_tokenes :: [Quantok.Tokene.t()], timestamp :: integer()}
+          | {:absorbed, collector_id :: binary(), tokene_id :: binary(),
+             updated_collector :: Quantok.Node.t(), timestamp :: integer()}
+          | {:triggered, collector_id :: binary(), output :: binary(),
+             cleared_collector :: Quantok.Node.t(), timestamp :: integer()}
+          | {:transformed, transformer_id :: binary(), old_tokene_id :: binary(),
+             new_tokenes :: [Quantok.Tokene.t()], timestamp :: integer()}
           | {:tokene_removed, tokene_id :: binary(), timestamp :: integer()}
-          | {:collector_cleared, collector_id :: binary(), cleared_collector :: Quantok.Node.t(), timestamp :: integer()}
+          | {:collector_cleared, collector_id :: binary(),
+             cleared_collector :: Quantok.Node.t(), timestamp :: integer()}
           | {:passive_rotated, node_id :: binary(), updated_node :: Quantok.Node.t(), timestamp :: integer()}
           | {:gravity_changed, gravity :: {float(), float()}, timestamp :: integer()}
           | {:decay_changed, decay_config :: map(), timestamp :: integer()}

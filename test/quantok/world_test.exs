@@ -265,7 +265,10 @@ defmodule Quantok.WorldTest do
       {:ok, :ok} = World.absorb_tokene(w, collector.id, tokene.id)
 
       # Tick 3 times to hit the interval
-      Enum.each(1..3, fn _ -> World.tick(w); Process.sleep(5) end)
+      Enum.each(1..3, fn _ ->
+        World.tick(w)
+        Process.sleep(5)
+      end)
       Process.sleep(10)
 
       state = World.get_state(w)

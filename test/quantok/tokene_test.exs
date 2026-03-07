@@ -197,7 +197,7 @@ defmodule Quantok.TokeneTest do
     test "split produces child-encoding tokenes" do
       t = Tokene.new("hello world", :word, decay: %{enabled: true, rate: 1.0, shatter: :split})
       {:ok, :split, children} = Tokene.shatter(t)
-      assert length(children) > 0
+      assert children != []
       assert Enum.all?(children, &(&1.encoding == :token))
     end
 

@@ -286,7 +286,6 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_event("load_world", %{"name" => name}, socket) do
-    # Prevent path traversal — only allow alphanumeric, underscore, hyphen
     safe_name = name |> Path.basename() |> String.replace(~r/[^a-zA-Z0-9_\-]/, "")
 
     path =
@@ -294,42 +293,15 @@ defmodule QuantokWeb.WorldLive do
       |> Enum.map(&Path.join(&1, "#{safe_name}.json"))
       |> Enum.find(&File.exists?/1)
 
-    if path do
-      case Snapshot.load_from_file(path) do
-        {:ok, snapshot} ->
-          # Clear existing world
-          world = World.get_state(socket.assigns.world_pid)
-          Enum.each(Map.keys(world.tokenes), &World.remove_tokene(socket.assigns.world_pid, &1))
-          Enum.each(Map.keys(world.nodes), &World.remove_node(socket.assigns.world_pid, &1))
-
-          # Load snapshot
-          {:ok, node_count} = Snapshot.load_into(socket.assigns.world_pid, snapshot)
-
-          # Push all nodes to client
-          loaded_world = World.get_state(socket.assigns.world_pid)
-
-          socket =
-            socket
-            |> push_event("clear_tokenes", %{})
-            |> push_event("clear_nodes", %{})
-            |> assign(:tokene_count, 0)
-            |> assign(:node_count, node_count)
-            |> assign(:world_name, snapshot["name"] || name)
-
-          socket =
-            Enum.reduce(Map.values(loaded_world.nodes), socket, fn node, acc ->
-              push_node(acc, node)
-            end)
-
-          {:noreply, socket}
-
-        {:error, reason} ->
-          require Logger
-          Logger.warning("Failed to load world #{safe_name}: #{inspect(reason)}")
-          {:noreply, socket}
-      end
+    with path when path != nil <- path,
+         {:ok, snapshot} <- Snapshot.load_from_file(path) do
+      {:noreply, do_load_world(socket, snapshot, name)}
     else
-      {:noreply, socket}
+      nil -> {:noreply, socket}
+      {:error, reason} ->
+        require Logger
+        Logger.warning("Failed to load world #{safe_name}: #{inspect(reason)}")
+        {:noreply, socket}
     end
   end
 
@@ -361,58 +333,12 @@ defmodule QuantokWeb.WorldLive do
 
     case Map.get(world.tokenes, tid) do
       nil ->
-        # Already removed (race condition) — just clean up client
         {:noreply, socket}
 
       tokene ->
         {:ok, behavior, fragments} = Tokene.shatter(tokene)
         World.remove_tokene(socket.assigns.world_pid, tid)
-
-        case behavior do
-          :dissolve ->
-            socket =
-              socket
-              |> push_event("shatter_tokene", %{tokene_id: tid, behavior: "dissolve", fragments: []})
-              |> update(:tokene_count, &max(&1 - 1, 0))
-            {:noreply, socket}
-
-          b when b in [:split, :explode] ->
-            fragment_data = Enum.map(fragments, fn t ->
-              {w, h} = Tokene.dimensions(t)
-              %{
-                id: t.id, value: t.value, encoding: to_string(t.encoding),
-                width: w, height: h, mass: Tokene.mass(t), integrity: t.integrity,
-                decay: %{
-                  enabled: t.decay.enabled,
-                  half_life: if(t.decay.half_life == :infinite, do: 0, else: t.decay.half_life),
-                  shatter: to_string(t.decay.shatter)
-                }
-              }
-            end)
-            count_delta = length(fragments) - 1
-            socket =
-              socket
-              |> push_event("shatter_tokene", %{
-                tokene_id: tid, behavior: to_string(b), fragments: fragment_data
-              })
-              |> update(:tokene_count, &max(&1 + count_delta, 0))
-            {:noreply, socket}
-
-          :fossilize ->
-            fossil = List.first(fragments)
-            {w, h} = Tokene.dimensions(fossil)
-            fossil_data = %{
-              id: fossil.id, value: fossil.value, encoding: to_string(fossil.encoding),
-              width: w, height: h, mass: Tokene.mass(fossil), integrity: fossil.integrity,
-              decay: %{enabled: false, half_life: 0, shatter: "fossilize"}
-            }
-            socket =
-              socket
-              |> push_event("shatter_tokene", %{
-                tokene_id: tid, behavior: "fossilize", fragments: [fossil_data]
-              })
-            {:noreply, socket}
-        end
+        {:noreply, apply_shatter(socket, tid, behavior, fragments)}
     end
   end
 
@@ -562,6 +488,63 @@ defmodule QuantokWeb.WorldLive do
   end
 
   # Helpers
+
+  defp do_load_world(socket, snapshot, name) do
+    world = World.get_state(socket.assigns.world_pid)
+    Enum.each(Map.keys(world.tokenes), &World.remove_tokene(socket.assigns.world_pid, &1))
+    Enum.each(Map.keys(world.nodes), &World.remove_node(socket.assigns.world_pid, &1))
+
+    {:ok, node_count} = Snapshot.load_into(socket.assigns.world_pid, snapshot)
+    loaded_world = World.get_state(socket.assigns.world_pid)
+
+    socket
+    |> push_event("clear_tokenes", %{})
+    |> push_event("clear_nodes", %{})
+    |> assign(:tokene_count, 0)
+    |> assign(:node_count, node_count)
+    |> assign(:world_name, snapshot["name"] || name)
+    |> then(fn s ->
+      Enum.reduce(Map.values(loaded_world.nodes), s, &push_node(&2, &1))
+    end)
+  end
+
+  defp apply_shatter(socket, tid, :dissolve, _fragments) do
+    socket
+    |> push_event("shatter_tokene", %{tokene_id: tid, behavior: "dissolve", fragments: []})
+    |> update(:tokene_count, &max(&1 - 1, 0))
+  end
+
+  defp apply_shatter(socket, tid, behavior, fragments)
+       when behavior in [:split, :explode] do
+    fragment_data = Enum.map(fragments, &serialize_fragment/1)
+
+    socket
+    |> push_event("shatter_tokene", %{
+      tokene_id: tid, behavior: to_string(behavior), fragments: fragment_data
+    })
+    |> update(:tokene_count, &max(&1 + length(fragments) - 1, 0))
+  end
+
+  defp apply_shatter(socket, tid, :fossilize, [fossil | _]) do
+    socket
+    |> push_event("shatter_tokene", %{
+      tokene_id: tid, behavior: "fossilize", fragments: [serialize_fragment(fossil)]
+    })
+  end
+
+  defp serialize_fragment(t) do
+    {w, h} = Tokene.dimensions(t)
+
+    %{
+      id: t.id, value: t.value, encoding: to_string(t.encoding),
+      width: w, height: h, mass: Tokene.mass(t), integrity: t.integrity,
+      decay: %{
+        enabled: t.decay.enabled,
+        half_life: if(t.decay.half_life == :infinite, do: 0, else: t.decay.half_life),
+        shatter: to_string(t.decay.shatter)
+      }
+    }
+  end
 
   defp push_node(socket, node) do
     {px, py} = node.position

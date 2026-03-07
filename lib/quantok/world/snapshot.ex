@@ -37,42 +37,41 @@ defmodule Quantok.World.Snapshot do
   """
   @spec load_into(pid(), map()) :: {:ok, non_neg_integer()}
   def load_into(world_pid, %{"version" => 1} = snapshot) do
-    # Set environment
-    if env = snapshot["environment"] do
-      gx = get_in(env, ["gravity", "x"]) || 0.0
-      gy = get_in(env, ["gravity", "y"]) || 9.81
-      World.set_gravity(world_pid, {gx, gy})
+    load_environment(world_pid, snapshot["environment"])
 
-      if decay = env["decay"] do
-        shatter = case decay["shatter"] do
-          "split" -> :split
-          "dissolve" -> :dissolve
-          "explode" -> :explode
-          "fossilize" -> :fossilize
-          _ -> :split
-        end
-        World.set_decay(world_pid, %{
-          enabled: decay["enabled"] == true,
-          rate: decay["rate"] || 1.0,
-          shatter: shatter
-        })
-      end
-    end
-
-    # Create nodes
     nodes = snapshot["nodes"] || []
-
-    Enum.each(nodes, fn node_data ->
-      node = deserialize_node(node_data)
-      World.add_node(world_pid, node)
-    end)
-
+    Enum.each(nodes, fn data -> World.add_node(world_pid, deserialize_node(data)) end)
     {:ok, length(nodes)}
   end
 
   def load_into(_world_pid, %{"version" => v}) do
     {:error, {:unsupported_version, v}}
   end
+
+  defp load_environment(_world_pid, nil), do: :ok
+
+  defp load_environment(world_pid, env) do
+    gx = get_in(env, ["gravity", "x"]) || 0.0
+    gy = get_in(env, ["gravity", "y"]) || 9.81
+    World.set_gravity(world_pid, {gx, gy})
+    load_decay(world_pid, env["decay"])
+  end
+
+  defp load_decay(_world_pid, nil), do: :ok
+
+  defp load_decay(world_pid, decay) do
+    World.set_decay(world_pid, %{
+      enabled: decay["enabled"] == true,
+      rate: decay["rate"] || 1.0,
+      shatter: safe_shatter(decay["shatter"])
+    })
+  end
+
+  defp safe_shatter("split"), do: :split
+  defp safe_shatter("dissolve"), do: :dissolve
+  defp safe_shatter("explode"), do: :explode
+  defp safe_shatter("fossilize"), do: :fossilize
+  defp safe_shatter(_), do: :split
 
   @doc """
   Load from a JSON string.
