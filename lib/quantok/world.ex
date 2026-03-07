@@ -28,7 +28,11 @@ defmodule Quantok.World do
     name: "Untitled World",
     nodes: %{},
     tokenes: %{},
-    environment: %{gravity: {0.0, 9.81}, tick_rate: 30},
+    environment: %{
+      gravity: {0.0, 9.81},
+      tick_rate: 30,
+      decay: %{enabled: false, rate: 1.0, shatter: :split}
+    },
     tick_count: 0,
     paused: false
   ]
@@ -138,7 +142,7 @@ defmodule Quantok.World do
 
   def handle_call({:fire_emitter, emitter_id}, _from, {world, events}) do
     with %Node{type: :emitter} = node <- Map.get(world.nodes, emitter_id),
-         {:ok, tokenes} <- Emitter.fire(node) do
+         {:ok, tokenes} <- Emitter.fire(node, Map.get(world.environment, :decay, %{})) do
       event = {:emitted, emitter_id, tokenes, now()}
       world = Event.apply(world, event)
       broadcast(world, {:emit, emitter_id, tokenes})

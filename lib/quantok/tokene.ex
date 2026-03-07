@@ -6,10 +6,25 @@ defmodule Quantok.Tokene do
   emitters, fall through the world affected by physics, and are absorbed by
   collectors. Their size and mass derive from byte_size, and their integrity
   determines how resistant they are to splitting.
+
+  ## Decay
+
+  Tokenes can optionally decay over time based on their encoding's base
+  half-life, modified by world and emitter rate multipliers. Decay is off
+  by default. When integrity reaches 0, the tokene shatters according to
+  its configured shatter behavior (:split, :dissolve, :explode, :fossilize).
   """
 
   @type encoding ::
           :bit | :byte | :rune | :token | :ngram | :word | :phrase | :sentence
+
+  @type shatter :: :split | :dissolve | :explode | :fossilize
+
+  @type decay_config :: %{
+          enabled: boolean(),
+          half_life: number() | :infinite,
+          shatter: shatter()
+        }
 
   @type t :: %__MODULE__{
           id: binary(),
@@ -19,7 +34,8 @@ defmodule Quantok.Tokene do
           integrity: float(),
           source_id: binary() | nil,
           created_at: integer(),
-          metadata: map()
+          metadata: map(),
+          decay: decay_config()
         }
 
   @enforce_keys [:id, :value, :encoding]
@@ -31,7 +47,8 @@ defmodule Quantok.Tokene do
     :source_id,
     integrity: 0.5,
     created_at: 0,
-    metadata: %{}
+    metadata: %{},
+    decay: %{enabled: false, half_life: :infinite, shatter: :split}
   ]
 
   @split_hierarchy [:sentence, :phrase, :word, :token, :rune, :byte, :bit]
@@ -47,11 +64,50 @@ defmodule Quantok.Tokene do
     sentence: 0.1
   }
 
+  # Base half-lives in milliseconds per encoding level.
+  # Coarse encodings decay fast, fine encodings are stable.
+  @base_half_life %{
+    sentence: 8_000,
+    phrase: 15_000,
+    word: 30_000,
+    token: 45_000,
+    ngram: 50_000,
+    rune: 60_000,
+    byte: 120_000,
+    bit: :infinite
+  }
+
   @doc """
   Creates a new tokene from a value and encoding.
+  Accepts optional keyword opts for source_id and decay config.
   """
-  @spec new(binary(), encoding(), binary() | nil) :: t()
-  def new(value, encoding, source_id \\ nil) do
+  @spec new(binary(), encoding(), binary() | nil | keyword()) :: t()
+  def new(value, encoding, source_id_or_opts \\ nil)
+
+  def new(value, encoding, opts) when is_list(opts) do
+    source_id = Keyword.get(opts, :source_id)
+    decay_opts = Keyword.get(opts, :decay, %{})
+    do_new(value, encoding, source_id, decay_opts)
+  end
+
+  def new(value, encoding, source_id) do
+    do_new(value, encoding, source_id, %{})
+  end
+
+  defp do_new(value, encoding, source_id, decay_opts) do
+    enabled = Map.get(decay_opts, :enabled, false)
+    rate = Map.get(decay_opts, :rate, 1.0)
+    shatter = Map.get(decay_opts, :shatter, :split)
+
+    base = Map.fetch!(@base_half_life, encoding)
+
+    half_life =
+      if base == :infinite or not enabled do
+        :infinite
+      else
+        round(base / max(rate, 0.01))
+      end
+
     %__MODULE__{
       id: generate_id(),
       value: value,
@@ -60,9 +116,35 @@ defmodule Quantok.Tokene do
       integrity: Map.fetch!(@default_integrity, encoding),
       source_id: source_id,
       created_at: System.monotonic_time(:millisecond),
-      metadata: %{}
+      metadata: %{},
+      decay: %{enabled: enabled, half_life: half_life, shatter: shatter}
     }
   end
+
+  @doc """
+  Returns the base half-life (ms) for an encoding level.
+  """
+  @spec base_half_life(encoding()) :: non_neg_integer() | :infinite
+  def base_half_life(encoding), do: Map.fetch!(@base_half_life, encoding)
+
+  @doc """
+  Compute current integrity based on elapsed time and decay config.
+  Returns the original integrity if decay is disabled.
+  """
+  @spec current_integrity(t()) :: float()
+  def current_integrity(%__MODULE__{decay: %{enabled: false}, integrity: i}), do: i
+  def current_integrity(%__MODULE__{decay: %{half_life: :infinite}, integrity: i}), do: i
+
+  def current_integrity(%__MODULE__{integrity: initial, created_at: created_at, decay: decay}) do
+    elapsed = System.monotonic_time(:millisecond) - created_at
+    initial * :math.pow(0.5, elapsed / decay.half_life)
+  end
+
+  @doc """
+  Returns true if the tokene has decayed past the shatter threshold.
+  """
+  @spec shattered?(t()) :: boolean()
+  def shattered?(tokene), do: current_integrity(tokene) < 0.05
 
   @doc """
   Returns the encoding one level below in the split hierarchy.
@@ -95,7 +177,6 @@ defmodule Quantok.Tokene do
   """
   @spec mass(t()) :: float()
   def mass(%__MODULE__{byte_size: size}) do
-    # Base mass + logarithmic scaling so sentences aren't absurdly heavy
     0.1 + :math.log2(max(size, 1)) * 0.5
   end
 

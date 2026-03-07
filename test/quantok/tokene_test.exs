@@ -113,6 +113,86 @@ defmodule Quantok.TokeneTest do
     end
   end
 
+  describe "new/3 with decay opts" do
+    test "decay disabled by default" do
+      t = Tokene.new("hello", :word)
+      assert t.decay.enabled == false
+      assert t.decay.half_life == :infinite
+      assert t.decay.shatter == :split
+    end
+
+    test "decay enabled computes half_life from encoding base" do
+      t = Tokene.new("hello", :word, decay: %{enabled: true, rate: 1.0, shatter: :dissolve})
+      assert t.decay.enabled == true
+      assert t.decay.half_life == 30_000
+      assert t.decay.shatter == :dissolve
+    end
+
+    test "decay rate scales half_life" do
+      t = Tokene.new("hello", :word, decay: %{enabled: true, rate: 2.0})
+      # word base is 30_000, rate 2.0 -> 15_000
+      assert t.decay.half_life == 15_000
+    end
+
+    test "bit encoding always has infinite half_life" do
+      t = Tokene.new("1", :bit, decay: %{enabled: true, rate: 1.0})
+      assert t.decay.half_life == :infinite
+    end
+
+    test "keyword opts with source_id and decay" do
+      t = Tokene.new("x", :byte, source_id: "e1", decay: %{enabled: true, rate: 1.0})
+      assert t.source_id == "e1"
+      assert t.decay.enabled == true
+      assert t.decay.half_life == 120_000
+    end
+  end
+
+  describe "current_integrity/1" do
+    test "returns base integrity when decay disabled" do
+      t = Tokene.new("hello", :word)
+      assert Tokene.current_integrity(t) == 0.4
+    end
+
+    test "returns base integrity when half_life is infinite" do
+      t = Tokene.new("1", :bit, decay: %{enabled: true, rate: 1.0})
+      assert Tokene.current_integrity(t) == 1.0
+    end
+
+    test "integrity decreases over time when decay enabled" do
+      t = Tokene.new("hello", :word, decay: %{enabled: true, rate: 1.0})
+      # Immediately after creation, integrity should be close to initial
+      assert_in_delta Tokene.current_integrity(t), 0.4, 0.01
+
+      # Simulate elapsed time by backdating created_at
+      old_t = %{t | created_at: t.created_at - 30_000}
+      # After one half-life (30s for word), integrity should be ~half
+      assert_in_delta Tokene.current_integrity(old_t), 0.2, 0.02
+    end
+  end
+
+  describe "shattered?/1" do
+    test "not shattered when decay disabled" do
+      t = Tokene.new("hello", :word)
+      refute Tokene.shattered?(t)
+    end
+
+    test "shattered after many half-lives" do
+      t = Tokene.new("hello", :word, decay: %{enabled: true, rate: 1.0})
+      # Backdate by 5 half-lives (150s) — integrity should be ~0.0125
+      old_t = %{t | created_at: t.created_at - 150_000}
+      assert Tokene.shattered?(old_t)
+    end
+  end
+
+  describe "base_half_life/1" do
+    test "returns encoding-specific half-lives" do
+      assert Tokene.base_half_life(:sentence) == 8_000
+      assert Tokene.base_half_life(:word) == 30_000
+      assert Tokene.base_half_life(:byte) == 120_000
+      assert Tokene.base_half_life(:bit) == :infinite
+    end
+  end
+
   describe "unique IDs" do
     test "each tokene gets a unique id" do
       ids = for _ <- 1..100, do: Tokene.new("x", :byte).id

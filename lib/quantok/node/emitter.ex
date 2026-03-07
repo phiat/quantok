@@ -10,6 +10,7 @@ defmodule Quantok.Node.Emitter do
   - :emit_rate - milliseconds between tokene emissions (for staggered output)
   - :auto_repeat - whether to re-fire automatically on a timer
   - :repeat_interval - ms between auto-fires (if auto_repeat is true)
+  - :decay - decay config for emitted tokenes (%{enabled, rate, shatter})
   """
 
   alias Quantok.{Node, Tokene}
@@ -21,7 +22,8 @@ defmodule Quantok.Node.Emitter do
           optional(:chunker_opts) => map(),
           optional(:emit_rate) => non_neg_integer(),
           optional(:auto_repeat) => boolean(),
-          optional(:repeat_interval) => non_neg_integer()
+          optional(:repeat_interval) => non_neg_integer(),
+          optional(:decay) => map()
         }
 
   @doc """
@@ -36,7 +38,8 @@ defmodule Quantok.Node.Emitter do
       chunker_opts: Keyword.get(opts, :chunker_opts, %{}),
       emit_rate: Keyword.get(opts, :emit_rate, 250),
       auto_repeat: Keyword.get(opts, :auto_repeat, false),
-      repeat_interval: Keyword.get(opts, :repeat_interval, 5000)
+      repeat_interval: Keyword.get(opts, :repeat_interval, 5000),
+      decay: Keyword.get(opts, :decay, %{})
     }
 
     Node.new(:emitter, %{
@@ -48,23 +51,43 @@ defmodule Quantok.Node.Emitter do
 
   @doc """
   Fires the emitter: executes the source, chunks the output, returns tokenes.
+  Accepts optional world_decay config to merge with emitter decay config.
   """
-  @spec fire(Node.t()) :: {:ok, [Tokene.t()]} | {:error, term()}
-  def fire(%Node{type: :emitter, config: config} = node) do
+  @spec fire(Node.t(), map()) :: {:ok, [Tokene.t()]} | {:error, term()}
+  def fire(node, world_decay \\ %{})
+
+  def fire(%Node{type: :emitter, config: config} = node, world_decay) do
     with {:ok, output} <- execute_source(config),
          chunks <- chunk_output(output, config) do
+      decay_opts = resolve_decay(config, world_decay)
+
       tokenes =
         chunks
         |> Enum.with_index()
         |> Enum.map(fn {chunk, index} ->
           encoding = config.chunker.encoding()
 
-          tokene = Tokene.new(chunk, encoding, node.id)
+          tokene = Tokene.new(chunk, encoding, source_id: node.id, decay: decay_opts)
           %{tokene | metadata: Map.put(tokene.metadata, :index, index)}
         end)
 
       {:ok, tokenes}
     end
+  end
+
+  # Merge world decay defaults with emitter-level overrides.
+  # Emitter config takes precedence over world config.
+  defp resolve_decay(emitter_config, world_decay) do
+    emitter_decay = Map.get(emitter_config, :decay, %{})
+
+    base = %{
+      enabled: Map.get(world_decay, :enabled, false),
+      rate: Map.get(world_decay, :rate, 1.0),
+      shatter: Map.get(world_decay, :shatter, :split)
+    }
+
+    # Emitter overrides world defaults
+    Map.merge(base, emitter_decay)
   end
 
   defp execute_source(%{source: source, command: command}) do

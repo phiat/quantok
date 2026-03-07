@@ -348,7 +348,13 @@ defmodule QuantokWeb.WorldLive do
           width: w,
           height: h,
           mass: Tokene.mass(t),
-          emit_rate: rate
+          emit_rate: rate,
+          created_at: t.created_at,
+          decay: %{
+            enabled: t.decay.enabled,
+            half_life: if(t.decay.half_life == :infinite, do: 0, else: t.decay.half_life),
+            shatter: to_string(t.decay.shatter)
+          }
         }
       end)
 
