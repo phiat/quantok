@@ -2,11 +2,127 @@
 
 ## Overview
 
-Collectors evolve from simple "catch N tokenes" to **physically meaningful buffer containers** where slot encoding, capacity, and geometry drive collection behavior.
+Collectors evolve from simple "catch N tokenes" to **physically meaningful buffer containers** with configurable trigger modes, directional ports, output re-emission, and emitter pairing.
 
-## Core Concepts
+## Node Ports (Universal)
 
-### Typed Slots
+Every node that has input or output flow gets **ports** with configurable direction. This applies to emitters, collectors, and transformers.
+
+```elixir
+%{
+  input_port: %{direction: :top, offset: 0.0},
+  output_port: %{direction: :bottom, offset: 0.0}
+}
+```
+
+**Directions**: `:top | :bottom | :left | :right | :none`
+
+- `direction` controls where the pipe spout renders, where sensors sit, where tokenes spawn/enter
+- `offset` shifts the port laterally (-1.0 to 1.0) from center
+- Configurable in hover menu (click to cycle direction)
+
+```
+    :top input                    :left input
+       │                              │
+   ┌───▼───┐                    ┌─────┤
+   │       │                    │     │
+   │  Node │                    │Node │
+   │       │                    │     │
+   └───┬───┘                    └─────┤
+       │                              │
+       ▼ :bottom output               ▼ :right output
+```
+
+**Defaults:**
+- Emitters: `output: :bottom, input: :none`
+- Collectors: `input: :top, output: :none` (or `:bottom` if output_mode is :emit)
+- Transformers: `input: :top, output: :bottom`
+
+This enables horizontal pipelines — use angled passives to deflect tokenes sideways into `:left`/`:right` ports.
+
+## Trigger Modes
+
+| Mode | When it fires | Timing basis | Use case |
+|------|--------------|--------------|----------|
+| `:manual` | User clicks "trigger" | — | Debugging, exploration |
+| `:on_full` | Buffer hits capacity | — | Batch processing |
+| `:timed` | Every N physics ticks | Physics time | Streaming, periodic processing |
+| `:on_tick` | Every N physics ticks (legacy alias) | Physics time | Same as :timed |
+
+### Timed Trigger Behavior
+
+- Physics-tick based (synced with simulation speed, pauses when world pauses)
+- Server tracks `ticks_since_trigger` on each physics step
+- On tick threshold: if buffer non-empty, trigger. If empty, skip.
+- Timer resets after any trigger (manual, full, or timed)
+- Visual: progress arc/fill ring around collector showing time until next trigger
+
+```elixir
+%{
+  trigger_mode: :timed,
+  tick_interval: 120,         # physics ticks between triggers (~4s at 30 tick/s)
+}
+```
+
+## Output Modes
+
+After a collector triggers, its action processes the buffer text. The **output mode** determines what happens to the result:
+
+| Mode | Behavior |
+|------|----------|
+| `:discard` | Output displayed/logged, not re-emitted (default) |
+| `:emit` | Output re-chunked into new tokenes, emitted from output port |
+| `:paired` | Buffer text sent as input to paired emitter, which fires with its own config |
+
+### `:emit` — Collector as Processor
+
+The collector re-chunks the action output and emits new tokenes from its output port.
+
+```elixir
+%{
+  output_mode: :emit,
+  output_chunker: Quantok.Chunker.Word,    # how to rechunk output
+}
+```
+
+**Flow:**
+```
+Emitter (date · word) → "Thu" "Mar" "6" "2025"
+    ↓ gravity
+Collector (reverse · 4 slots · timed 120 ticks)
+    ↓ trigger fires
+    action: reverse → "5202 6 raM uhT"
+    output_chunker: Word → "5202" "6" "raM" "uhT"
+    ↓ emit from output port
+New tokenes enter world with physics
+```
+
+Collector renders a pipe spout on its output port side (like emitters).
+
+### `:paired` — Collector Controls an Emitter
+
+The collector feeds its buffer contents to a paired emitter as input, then the emitter fires with its own chunker/config.
+
+```elixir
+%{
+  output_mode: :paired,
+  paired_emitter_id: "emitter-abc",
+}
+```
+
+**Behavior:**
+1. On trigger, collector's buffer text becomes the paired emitter's command input
+2. Paired emitter fires with its own chunker, encoding, decay config
+3. New tokenes appear from the emitter's output port (not the collector's)
+
+**Use cases:**
+- **Clock-driven pipeline**: timed collector triggers emitter on schedule
+- **Data routing**: collect words, feed to emitter that re-chunks as bytes
+- **Processing chains**: collect → reverse → feed to emitter → collect again
+
+**Feedback loop safety**: Paired triggers carry a depth counter. Max depth = 3. If a trigger chain exceeds this, the final trigger is silently dropped. Prevents runaway `A→B→A→B→...` loops.
+
+## Typed Slots
 
 Each buffer slot has an **encoding type** and a **count capacity**:
 
@@ -18,59 +134,28 @@ Each buffer slot has an **encoding type** and a **count capacity**:
 }
 ```
 
-**Matching rule**: strict encoding match. A `:word` slot only accepts `:word` tokenes. Mismatched tokenes bounce off. To convert between encodings, use transformers upstream (splitters to go finer, mergers to go coarser).
+**Matching rule**: strict encoding match. A `:word` slot only accepts `:word` tokenes. Mismatched tokenes bounce off. Use transformers upstream to convert between encodings.
 
-**Special case**: `:any` encoding accepts all tokenes, measured by byte_size. This is the simple default for new users.
-
-```elixir
-# Default — accepts anything, byte-measured
-Collector.new(slots: 4, slot_capacity: 16, slot_encoding: :any)
-
-# Typed — only words, count-measured
-Collector.new(slots: 4, slot_capacity: 4, slot_encoding: :word)
-```
+**Special case**: `:any` encoding accepts all tokenes, measured by byte_size. Default for new users.
 
 ### Fit-or-Bounce
 
-No splitting at collection. A tokene either fits in a slot or it bounces off:
+No splitting at collection. A tokene either fits or bounces:
 
-- Tokene byte_size (for :any slots) or count (for typed slots) checked against remaining capacity
-- If it fits → absorbed into slot, stacked visually
-- If it doesn't fit → impulse applied, tokene bounces away
-- Splitting is the job of the **splitter transformer**, not the collector
-
-This creates natural pipeline design: `emitter → splitter → collector`
+- Byte_size (`:any` slots) or count (typed slots) checked against remaining capacity
+- Fits → absorbed, stacked visually
+- Doesn't fit → impulse applied, tokene bounces away
+- Splitting is the job of the splitter transformer, not the collector
 
 ### Two Collection Modes
 
-**Managed** (default): The collector decides which slot receives the tokene. Scans slots left-to-right, places in first slot with capacity. Single sensor zone covers the whole collector.
+**Managed** (default): Collector routes tokenes to first slot with capacity. Single sensor zone.
 
-```
-Tokene "the" (3 bytes) → slot 0 has 5/16 used → fits → slot 0 (8/16)
-Tokene "fox" (3 bytes) → slot 0 has 8/16 → fits → slot 0 (11/16)
-Tokene "magnificent" (11 bytes) → slot 0 has 11/16, only 5 left → skip → slot 1
-```
-
-**Independent**: Each slot has its **own sensor/activation zone** at its opening. Tokenes fall toward specific slots based on physics. Spatial positioning becomes a puzzle.
-
-```
-  ┌────┐  ┌────┐  ┌────┐  ┌────┐
-  │    │  │ fox│  │    │  │    │
-  │    │  │the │  │    │  │    │
-  │jump│  │lazy│  │    │  │    │
-  │over│  │dog │  │    │  │    │
-  └════┘  └════┘  └════┘  └════┘
-   1/4     4/4     0/4     0/4
-    ↑ each slot has its own sensor at the opening
-```
+**Independent**: Each slot has its own sensor at its opening. Tokenes fall into specific slots based on physics. Spatial positioning becomes a puzzle.
 
 Config: `mode: :managed | :independent`
 
-Default view uses independent mode to emphasize tokenes and make the sandbox visual.
-
 ### Bounce Physics
-
-When a tokene is rejected (wrong encoding or slot full):
 
 ```
 Client: "tokene X near collector Y (slot Z in independent mode)"
@@ -81,118 +166,107 @@ Server: check encoding match + capacity
   → {:rejected, :collector_full}
 Client:
   absorbed → reparent tokene mesh into slot, remove physics body
-  rejected → apply bounce impulse away from slot opening
+  rejected → apply bounce impulse away from port opening
 ```
 
 ### Visual: Stacked Tokenes in Slots
 
-Absorbed tokenes remain visible inside their slots, stacked bottom-up:
-
-- On absorption: tokene mesh reparented into slot group, repositioned to stack
-- Tokene loses its physics body but keeps its visual (texture, color, encoding)
-- Each slot shows count/capacity indicator
+- Absorbed tokenes visible inside slots, stacked from opening inward
+- Tokene loses physics body, keeps visual (texture, color, encoding)
+- Count/capacity indicator per slot
 - Full slots glow or change border color
-- On trigger/flush: stacked meshes animate out (fade, dissolve, or eject)
+- On trigger: stacked meshes animate out (fade, dissolve, eject)
 
-### Slot as Physical Container
+## Full Config
 
-Each slot is a mini physics container:
+```elixir
+%{
+  # Slots
+  slots: 4,
+  slot_capacity: 4,
+  slot_encoding: :any,
+  mode: :managed,
 
+  # Trigger
+  trigger_mode: :on_full,       # :on_full | :manual | :timed
+  tick_interval: 120,           # ticks between triggers (for :timed)
+
+  # Action
+  action: Collector.Echo,
+  command: "echo",
+
+  # Output
+  output_mode: :discard,        # :discard | :emit | :paired
+  output_chunker: nil,          # for :emit mode
+  paired_emitter_id: nil,       # for :paired mode
+
+  # Ports
+  input_port: %{direction: :top, offset: 0.0},
+  output_port: %{direction: :none, offset: 0.0},
+
+  # State
+  buffer: [],
+  ticks_since_trigger: 0
+}
 ```
-  ┌──┐   walls = static Rapier bodies
-  │  │   floor = static Rapier body
-  │  │   opening = sensor zone (activation area)
-  └──┘
-```
 
-In independent mode, the slot walls physically contain tokenes. In managed mode, walls are visual-only (server routes tokenes, no physical containment needed).
-
-## Encoding Hierarchy Interactions
-
-The existing hierarchy becomes mechanically meaningful:
+## Encoding Hierarchy
 
 ```
 sentence → phrase → word → token → rune → byte → bit
 ```
 
-- Emitter encoding (determined by chunker) must match collector slot encoding
+- Emitter encoding (chunker) must match collector slot encoding (typed mode)
 - Transformers convert between levels:
-  - Splitter: coarse → fine (word → tokens, sentence → words)
-  - Merger (new): fine → coarse (bytes → word, words → sentence)
+  - Splitter: coarse → fine (word → tokens)
+  - Merger (new): fine → coarse (bytes → word)
 - Pipeline design = encoding routing puzzle
 
 ### Merger Transformer (New)
 
-Combines N fine-grained tokenes into one coarser tokene:
+Combines N fine tokenes into one coarser tokene:
 
 ```
 bytes "h","e","l","l","o" → merger(target: :word) → word "hello"
 ```
 
-Needs a trigger condition (N inputs, or delimiter-based, or manual). Design TBD.
-
-## Trigger Behavior
-
-When a collector triggers (manually, on-full, or on-tick):
-
-1. All slot contents are read (per-slot or concatenated, depending on action config)
-2. Action processes the buffer (echo, reverse, upcase, shell, etc.)
-3. Slot visuals animate out (consumed)
-4. Output optionally re-emitted as new tokenes (if output_chunker configured)
-
-Future: per-slot actions, selective triggering, partial consumption.
-
-## Config Summary
-
-```elixir
-%{
-  # Slot configuration
-  slots: 4,                    # number of buffer slots
-  slot_capacity: 4,            # capacity per slot (count for typed, bytes for :any)
-  slot_encoding: :word,        # :any | :bit | :byte | :rune | :token | :word | :phrase | :sentence
-
-  # Collection mode
-  mode: :independent,          # :managed | :independent
-
-  # Trigger
-  trigger_mode: :on_full,      # :on_full | :manual | :on_tick
-  tick_interval: 60,           # ticks between auto-triggers
-
-  # Action
-  action: Collector.Echo,      # module that processes buffer
-  command: "echo",             # command passed to action
-  output_chunker: nil          # optional re-emission chunker
-}
-```
+Needs a trigger condition (N inputs, delimiter-based, or manual). Design TBD.
 
 ## Implementation Phases
 
-### Phase 1: Byte-aware slots with stacked visuals
-- Add slot_capacity (bytes) to collector config
-- Track bytes-used-per-slot on server
-- Render stacked tokene meshes inside slots (reparent on absorb)
-- Fit-or-bounce logic (reject tokenes that don't fit)
-- Bounce impulse on client side
-- Keep single sensor (managed mode only)
+### Phase 1: Trigger modes + output emission
+- Implement `:timed` trigger mode (physics-tick based)
+- Add `output_mode: :emit` with `output_chunker`
+- Collector emits new tokenes from output port after trigger
+- Pipe spout rendering on output port
+- Timer progress visual (arc/ring)
 
-### Phase 2: Encoding-typed slots
-- Add slot_encoding to config
-- Strict encoding match check on absorb
-- Encoding mismatch → bounce
-- Update sidebar buttons to show slot encoding options
+### Phase 2: Emitter pairing
+- Add `output_mode: :paired` with `paired_emitter_id`
+- On trigger, send buffer text as emitter input
+- Paired emitter fires with its own config
+- Feedback loop depth guard (max 3)
+- UI: drag-connect collector to emitter to create pairing
 
-### Phase 3: Independent mode with per-slot sensors
-- Each slot gets its own Rapier sensor at opening
+### Phase 3: Configurable ports
+- Add port direction config to all nodes (emitters, collectors, transformers)
+- Port direction affects sensor placement, tokene spawn position, pipe rendering
+- Hover menu: cycle port direction
+- Enable horizontal pipeline layouts
+
+### Phase 4: Typed slots + fit-or-bounce
+- Add slot_encoding to collector config
+- Strict encoding match on absorb
+- Bounce impulse for rejected tokenes
+- Byte-aware capacity for :any slots
+
+### Phase 5: Independent mode + stacked visuals
+- Per-slot sensors with own activation zones
 - Slot walls as static physics bodies
-- Client reports slot index in sensor events
-- Spatial positioning matters
+- Stacked tokene rendering inside slots
+- Trigger consumption animation
 
-### Phase 4: Merger transformer
+### Phase 6: Merger transformer
 - New transformer type: combines fine tokenes into coarse
 - Configurable target encoding and trigger condition
-- Enables full encoding pipeline: emit → split → merge → collect
-
-### Phase 5: Trigger animations and output
-- Slot consumption animation (fade/dissolve/eject)
-- Re-emission from collector output port
-- Per-slot vs concatenated trigger modes
+- Full encoding pipeline: emit → split → merge → collect
