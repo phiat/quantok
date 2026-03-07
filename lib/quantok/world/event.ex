@@ -90,6 +90,12 @@ defmodule Quantok.World.Event do
     %{world | environment: Map.put(world.environment, :gravity, gravity)}
   end
 
+  def apply(world, {:decay_changed, decay_config, _ts}) do
+    current_decay = Map.get(world.environment, :decay, %{})
+    updated_decay = Map.merge(current_decay, decay_config)
+    %{world | environment: Map.put(world.environment, :decay, updated_decay)}
+  end
+
   def apply(world, {:paused, _ts}), do: %{world | paused: true}
   def apply(world, {:resumed, _ts}), do: %{world | paused: false}
 

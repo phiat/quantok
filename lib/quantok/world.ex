@@ -84,6 +84,9 @@ defmodule Quantok.World do
   def set_gravity(server, gravity),
     do: GenServer.cast(server, {:set_gravity, gravity})
 
+  def set_decay(server, decay_config),
+    do: GenServer.cast(server, {:set_decay, decay_config})
+
   # --- Server Callbacks ---
 
   @impl true
@@ -261,6 +264,12 @@ defmodule Quantok.World do
 
   def handle_cast({:set_gravity, gravity}, {world, events}) do
     event = {:gravity_changed, gravity, now()}
+    world = Event.apply(world, event)
+    {:noreply, {world, [event | events]}}
+  end
+
+  def handle_cast({:set_decay, decay_config}, {world, events}) do
+    event = {:decay_changed, decay_config, now()}
     world = Event.apply(world, event)
     {:noreply, {world, [event | events]}}
   end

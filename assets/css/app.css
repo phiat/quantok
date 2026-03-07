@@ -153,6 +153,7 @@ body { margin: 0; overflow: hidden; }
   transition: border-color 120ms, color 120ms;
 }
 .q-tb:hover { border-color: var(--q-peach); color: var(--q-peach); }
+.q-tb--active { border-color: var(--q-papaya); background: rgba(255,196,155,0.12); }
 
 .q-tb--load {
   color: var(--q-slate);

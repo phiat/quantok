@@ -34,6 +34,7 @@ defmodule QuantokWeb.WorldLive do
       |> assign(:node_count, 2)
       |> assign(:saved_worlds, list_saved_worlds())
       |> assign(:world_name, "Sandbox")
+      |> assign(:decay_enabled, false)
       |> assign(:next_x, 0)
       |> push_node(floor)
       |> push_node(emitter)
@@ -52,6 +53,7 @@ defmodule QuantokWeb.WorldLive do
         <button phx-click="fire_all" class="q-tb">fire all</button>
         <button phx-click="toggle_pause" class="q-tb">{if @paused, do: "resume", else: "pause"}</button>
         <button phx-click="clear_tokenes" class="q-tb">clear</button>
+        <button phx-click="toggle_decay" class={"q-tb" <> if(@decay_enabled, do: " q-tb--active", else: "")}>{if @decay_enabled, do: "decay on", else: "decay off"}</button>
         <span class="q-sep"></span>
         <button phx-click="save_world" class="q-tb">save</button>
         <button :for={world <- @saved_worlds} phx-click="load_world" phx-value-name={world} class="q-tb q-tb--load">{world}</button>
@@ -107,6 +109,12 @@ defmodule QuantokWeb.WorldLive do
     end
 
     {:noreply, assign(socket, :paused, !socket.assigns.paused)}
+  end
+
+  def handle_event("toggle_decay", _params, socket) do
+    new_enabled = !socket.assigns.decay_enabled
+    World.set_decay(socket.assigns.world_pid, %{enabled: new_enabled})
+    {:noreply, assign(socket, :decay_enabled, new_enabled)}
   end
 
   @allowed_shell_commands ["date", "uname -a", "echo hello world", "hostname", "whoami", "uptime"]
