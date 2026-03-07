@@ -59,6 +59,20 @@ The core mechanic. The same data chunked at different granularities produces tok
 
 Smaller chunks = lighter, more numerous. Larger chunks = heavier, fewer. A sentence-boulder behaves very differently from a stream of bit-sand.
 
+## Tokene Decay
+
+Tokenes can optionally decay over time. Each encoding level has a base half-life — coarse encodings (sentences, phrases) decay fast while fine encodings (bytes, bits) are stable or indestructible. Toggle decay globally from the topbar.
+
+| Encoding | Half-life | Feel |
+|----------|-----------|------|
+| sentence | 8s        | fragile boulder |
+| phrase   | 15s       | crumbling block |
+| word     | 30s       | weathering brick |
+| byte     | 2 min     | slow erosion |
+| bit      | infinite  | indestructible |
+
+Three config layers: world defaults, emitter overrides, encoding base half-lives. Decay is computed client-side per-frame (desaturation + opacity fade + death pulse). When integrity drops below threshold, tokenes shatter with one of four behaviors: **split** (child encoding), **dissolve** (vanish), **explode** (burst to bytes), or **fossilize** (freeze as static).
+
 ## Collector Buffers
 
 Collectors have visible buffer slots that fill with tokene colors as data is absorbed. Trigger a collector (manually or on-full) to process its buffer contents. See [docs/collector-buffers.md](docs/collector-buffers.md) for the upcoming typed-slot redesign with encoding-aware fit-or-bounce mechanics.
@@ -86,7 +100,7 @@ just fmt        # format all code
 | PostFX    | Three.js EffectComposer, bloom      |
 | Tokenizer | Tiktokenex (pure Elixir BPE)        |
 | Database  | SQLite (dev) / Postgres (prod)      |
-| Quality   | Credo, ExUnit (134 tests)           |
+| Quality   | Credo, ExUnit (151 tests)           |
 | Tasks     | just                                |
 
 ## License

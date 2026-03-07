@@ -385,27 +385,30 @@ boundaries are where it fractures — is a powerful teaching tool.
 
 ---
 
-## Tokene Lifecycle and Decay
+## Tokene Lifecycle and Decay *(implemented)*
 
-### Time-Based Decay
-Tokenes slowly lose integrity over time. After N seconds without collection,
-they start cracking and eventually shatter into smaller pieces.
+### Time-Based Decay *(implemented)*
+Encoding-based half-lives: sentence 8s, phrase 15s, word 30s, token 45s,
+rune 60s, byte 120s, bit infinite. Three config layers: world defaults →
+emitter overrides → encoding base. Toggle decay globally from topbar.
 
-- Creates urgency — build your pipeline fast or lose data
-- Half-life by encoding: sentences decay fast (fragile), bits are stable
-- Mirrors information theory — complex structures are harder to maintain
-- Configurable per-world: `decay_rate: 0.01` (integrity loss per second)
+Client computes integrity per-frame: `initial * 0.5^(elapsed/half_life)`.
+Visual: color desaturation (lerp toward grey), opacity fade, pulse when
+near death (< 15% integrity).
 
-### Fossil Record
+### Shatter Behaviors *(implemented)*
+When integrity drops below 5%, tokene shatters with configured behavior:
+- **:split** — rechunk at child encoding (sentence→phrases, word→tokens)
+- **:dissolve** — vanish silently
+- **:explode** — burst to byte fragments with random impulse
+- **:fossilize** — freeze as static body, decay disabled
+
+Bits are indestructible (always fossilize). Server-authoritative shatter logic.
+
+### Future: Fossil Record
 Shattered tokene remains (bits) accumulate at the bottom of the world.
 Over time, layers build up like sediment. The world has a geological
 history of data. Dig through layers to see what was emitted hours ago.
-
-### Tokene Age Visualization
-- Fresh tokenes: bright, saturated color
-- Aging tokenes: gradually desaturate, darken
-- Ancient tokenes: muted, cracked, weathered look
-- Age = `System.monotonic_time() - created_at`
 
 ---
 
