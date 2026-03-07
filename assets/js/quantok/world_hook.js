@@ -12,6 +12,7 @@ const WorldCanvas = {
     this.tokeneData = new Map();
     this.nodeData = new Map();
     this.sensorCooldown = new Map();
+    this._pendingShatter = new Set();
     this._pendingTimeouts = [];
     this._ready = false;
     this._eventQueue = [];
@@ -26,6 +27,7 @@ const WorldCanvas = {
     this.handleEvent("clear_tokenes", (data) => this._dispatch("clear_tokenes", data));
     this.handleEvent("clear_nodes", (data) => this._dispatch("clear_nodes", data));
     this.handleEvent("update_collector", (data) => this._dispatch("update_collector", data));
+    this.handleEvent("shatter_tokene", (data) => this._dispatch("shatter_tokene", data));
 
     // Async init
     this.rapier = await initRapier();
@@ -79,6 +81,7 @@ const WorldCanvas = {
       case "clear_tokenes":    this.onClearTokenes(); break;
       case "clear_nodes":      this.onClearNodes(); break;
       case "update_collector": this.onUpdateCollector(data); break;
+      case "shatter_tokene":  this.onShatterTokene(data); break;
     }
   },
 
@@ -250,6 +253,51 @@ const WorldCanvas = {
     this.worldRenderer.updateCollectorBuffer(collector_id, buffer || []);
   },
 
+  onShatterTokene({ tokene_id, behavior, fragments }) {
+    this._pendingShatter.delete(tokene_id);
+    const oldMesh = this.worldRenderer.meshes.get(tokene_id);
+    const oldPos = oldMesh
+      ? { x: oldMesh.position.x, y: -oldMesh.position.y }
+      : { x: 0, y: 0 };
+
+    // Remove the shattered tokene
+    this.physics.remove(tokene_id);
+    this.worldRenderer.removeTokene(tokene_id);
+    this.tokeneData.delete(tokene_id);
+
+    if (behavior === "dissolve" || !fragments || fragments.length === 0) {
+      return;
+    }
+
+    // Spawn fragment tokenes at old position with spread
+    fragments.forEach((t, i) => {
+      const hw = t.width / 2;
+      const hh = t.height / 2;
+      const spread = behavior === "explode" ? 20 : 10;
+      const xOff = (i - (fragments.length - 1) / 2) * spread;
+      this.physics.spawnTokene(t.id, oldPos.x + xOff, oldPos.y, hw, hh, t.mass);
+      this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
+      t._spawnedAt = performance.now();
+      this.tokeneData.set(t.id, t);
+
+      // Explode: apply random impulse
+      if (behavior === "explode") {
+        const body = this.physics.getBody(t.id);
+        if (body) {
+          const angle = (Math.random() - 0.5) * Math.PI;
+          const force = 50 + Math.random() * 100;
+          body.applyImpulse({ x: Math.cos(angle) * force, y: Math.sin(angle) * force }, true);
+        }
+      }
+
+      // Fossilize: make static (grey, no decay)
+      if (behavior === "fossilize") {
+        const body = this.physics.getBody(t.id);
+        if (body) body.setBodyType(this.rapier.RigidBodyType.Fixed);
+      }
+    });
+  },
+
   onTransformTokene({ old_tokene_id, new_tokenes }) {
     // Remove old
     this.physics.remove(old_tokene_id);
@@ -361,27 +409,16 @@ const WorldCanvas = {
 
     // Visual decay: compute integrity per-frame for decaying tokenes
     const now = performance.now();
-    const shattered = [];
     for (const [id, t] of this.tokeneData) {
       if (!t.decay || !t.decay.enabled || !t.decay.half_life) continue;
       const elapsed = now - (t._spawnedAt || now);
       const initialIntegrity = t.integrity || 0.5;
       const ratio = initialIntegrity * Math.pow(0.5, elapsed / t.decay.half_life);
       this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
-      if (ratio < 0.05 * initialIntegrity) {
-        shattered.push(id);
+      if (ratio < 0.05 * initialIntegrity && !this._pendingShatter.has(id)) {
+        this._pendingShatter.add(id);
+        this.pushEvent("tokene_shattered", { tokene_id: id });
       }
-    }
-    // Remove shattered tokenes and notify server
-    for (const id of shattered) {
-      const t = this.tokeneData.get(id);
-      this.physics.remove(id);
-      this.worldRenderer.removeTokene(id);
-      this.tokeneData.delete(id);
-      this.pushEvent("tokene_shattered", {
-        tokene_id: id,
-        shatter: t?.decay?.shatter || "split",
-      });
     }
 
     // Check sensor intersections (collectors + transformers)

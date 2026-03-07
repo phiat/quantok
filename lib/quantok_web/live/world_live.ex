@@ -296,8 +296,63 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_event("tokene_shattered", %{"tokene_id" => tid}, socket) do
-    World.remove_tokene(socket.assigns.world_pid, tid)
-    {:noreply, update(socket, :tokene_count, &max(&1 - 1, 0))}
+    world = World.get_state(socket.assigns.world_pid)
+
+    case Map.get(world.tokenes, tid) do
+      nil ->
+        # Already removed (race condition) — just clean up client
+        {:noreply, socket}
+
+      tokene ->
+        {:ok, behavior, fragments} = Tokene.shatter(tokene)
+        World.remove_tokene(socket.assigns.world_pid, tid)
+
+        case behavior do
+          :dissolve ->
+            socket =
+              socket
+              |> push_event("shatter_tokene", %{tokene_id: tid, behavior: "dissolve", fragments: []})
+              |> update(:tokene_count, &max(&1 - 1, 0))
+            {:noreply, socket}
+
+          b when b in [:split, :explode] ->
+            fragment_data = Enum.map(fragments, fn t ->
+              {w, h} = Tokene.dimensions(t)
+              %{
+                id: t.id, value: t.value, encoding: to_string(t.encoding),
+                width: w, height: h, mass: Tokene.mass(t), integrity: t.integrity,
+                decay: %{
+                  enabled: t.decay.enabled,
+                  half_life: if(t.decay.half_life == :infinite, do: 0, else: t.decay.half_life),
+                  shatter: to_string(t.decay.shatter)
+                }
+              }
+            end)
+            count_delta = length(fragments) - 1
+            socket =
+              socket
+              |> push_event("shatter_tokene", %{
+                tokene_id: tid, behavior: to_string(b), fragments: fragment_data
+              })
+              |> update(:tokene_count, &max(&1 + count_delta, 0))
+            {:noreply, socket}
+
+          :fossilize ->
+            fossil = List.first(fragments)
+            {w, h} = Tokene.dimensions(fossil)
+            fossil_data = %{
+              id: fossil.id, value: fossil.value, encoding: to_string(fossil.encoding),
+              width: w, height: h, mass: Tokene.mass(fossil), integrity: fossil.integrity,
+              decay: %{enabled: false, half_life: 0, shatter: "fossilize"}
+            }
+            socket =
+              socket
+              |> push_event("shatter_tokene", %{
+                tokene_id: tid, behavior: "fossilize", fragments: [fossil_data]
+              })
+            {:noreply, socket}
+        end
+    end
   end
 
   def handle_event("move_node", %{"node_id" => id, "x" => x, "y" => y}, socket) do

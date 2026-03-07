@@ -193,6 +193,47 @@ defmodule Quantok.TokeneTest do
     end
   end
 
+  describe "shatter/1" do
+    test "split produces child-encoding tokenes" do
+      t = Tokene.new("hello world", :word, decay: %{enabled: true, rate: 1.0, shatter: :split})
+      {:ok, :split, children} = Tokene.shatter(t)
+      assert length(children) > 0
+      assert Enum.all?(children, &(&1.encoding == :token))
+    end
+
+    test "dissolve returns empty list" do
+      t = Tokene.new("hello", :word, decay: %{enabled: true, rate: 1.0, shatter: :dissolve})
+      assert {:ok, :dissolve, []} = Tokene.shatter(t)
+    end
+
+    test "explode shatters to bytes" do
+      t = Tokene.new("hello", :word, decay: %{enabled: true, rate: 1.0, shatter: :explode})
+      {:ok, :explode, fragments} = Tokene.shatter(t)
+      assert length(fragments) == 5
+      assert Enum.all?(fragments, &(&1.encoding == :byte))
+    end
+
+    test "fossilize returns frozen tokene" do
+      t = Tokene.new("hello", :word, decay: %{enabled: true, rate: 1.0, shatter: :fossilize})
+      {:ok, :fossilize, [fossil]} = Tokene.shatter(t)
+      assert fossil.decay.enabled == false
+      assert fossil.decay.half_life == :infinite
+    end
+
+    test "bits always fossilize regardless of shatter config" do
+      t = Tokene.new("1", :bit, decay: %{enabled: true, rate: 1.0, shatter: :dissolve})
+      {:ok, :fossilize, [fossil]} = Tokene.shatter(t)
+      assert fossil.encoding == :bit
+      assert fossil.decay.enabled == false
+    end
+
+    test "unsplittable tokene fossilizes on split" do
+      t = Tokene.new("x", :byte, decay: %{enabled: true, rate: 1.0, shatter: :split})
+      {:ok, :fossilize, [fossil]} = Tokene.shatter(t)
+      assert fossil.decay.enabled == false
+    end
+  end
+
   describe "unique IDs" do
     test "each tokene gets a unique id" do
       ids = for _ <- 1..100, do: Tokene.new("x", :byte).id

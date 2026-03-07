@@ -151,6 +151,11 @@ export class PhysicsWorld {
     this.world.step();
   }
 
+  /** Get a rigid body by id */
+  getBody(id) {
+    return this.bodies.get(id) || null;
+  }
+
   /** Get position and rotation of a body */
   getTransform(id) {
     const body = this.bodies.get(id);

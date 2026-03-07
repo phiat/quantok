@@ -147,6 +147,56 @@ defmodule Quantok.Tokene do
   def shattered?(tokene), do: current_integrity(tokene) < 0.05
 
   @doc """
+  Shatters a tokene according to its decay shatter behavior.
+  Returns `{:ok, behavior, result_tokenes}`.
+
+  - `:split` — split into child encoding chunks
+  - `:dissolve` — removed, no fragments
+  - `:explode` — shatter all the way to bytes
+  - `:fossilize` — return a frozen copy (integrity locked, decay disabled)
+  """
+  @spec shatter(t()) :: {:ok, shatter(), [t()]}
+  def shatter(%__MODULE__{encoding: :bit} = tokene), do: {:ok, :fossilize, [fossilize(tokene)]}
+
+  def shatter(%__MODULE__{decay: %{shatter: :dissolve}}), do: {:ok, :dissolve, []}
+
+  def shatter(%__MODULE__{decay: %{shatter: :split}} = tokene) do
+    if splittable?(tokene) do
+      child_enc = child_encoding(tokene.encoding)
+      chunker = chunker_for_encoding(child_enc)
+      chunks = chunker.chunk(tokene.value)
+      children = Enum.map(chunks, &new(&1, child_enc, source_id: tokene.source_id))
+      {:ok, :split, children}
+    else
+      {:ok, :fossilize, [fossilize(tokene)]}
+    end
+  end
+
+  def shatter(%__MODULE__{decay: %{shatter: :explode}} = tokene) do
+    chunks = chunker_for_encoding(:byte).chunk(tokene.value)
+    fragments = Enum.map(chunks, &new(&1, :byte, source_id: tokene.source_id))
+    {:ok, :explode, fragments}
+  end
+
+  def shatter(%__MODULE__{decay: %{shatter: :fossilize}} = tokene) do
+    {:ok, :fossilize, [fossilize(tokene)]}
+  end
+
+  defp fossilize(tokene) do
+    %{tokene | decay: %{enabled: false, half_life: :infinite, shatter: :fossilize},
+               integrity: max(current_integrity(tokene), 0.05)}
+  end
+
+  defp chunker_for_encoding(:sentence), do: Quantok.Chunker.Sentence
+  defp chunker_for_encoding(:phrase), do: Quantok.Chunker.Phrase
+  defp chunker_for_encoding(:word), do: Quantok.Chunker.Word
+  defp chunker_for_encoding(:token), do: Quantok.Chunker.BPE
+  defp chunker_for_encoding(:rune), do: Quantok.Chunker.Rune
+  defp chunker_for_encoding(:byte), do: Quantok.Chunker.Byte
+  defp chunker_for_encoding(:bit), do: Quantok.Chunker.Bit
+  defp chunker_for_encoding(_), do: Quantok.Chunker.Byte
+
+  @doc """
   Returns the encoding one level below in the split hierarchy.
   Returns nil if already at the atomic level (:bit).
   """
