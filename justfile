@@ -38,7 +38,15 @@ console:
 
 # Quick chunk text from CLI (for debugging chunkers)
 chunk text encoding='word':
-    mix run -e "IO.inspect(Quantok.Chunker.{{encoding |> capitalize}}.chunk(\"{{text}}\"))"
+    mix run -e 'mod = Module.concat(Quantok.Chunker, String.capitalize("{{encoding}}")); IO.inspect(mod.chunk("{{text}}"))'
+
+# Fire an emitter and show output (debug a world in IEx)
+fire command='date' chunker='word':
+    mix run -e 'mod = Module.concat(Quantok.Chunker, String.capitalize("{{chunker}}")); e = Quantok.Node.Emitter.new(command: "{{command}}", chunker: mod); {:ok, ts} = Quantok.Node.Emitter.fire(e, %{}); Enum.each(ts, &IO.puts(&1.value))'
+
+# List saved worlds
+worlds:
+    @ls -1 priv/worlds/*.json 2>/dev/null | xargs -I{} basename {} .json || echo "No saved worlds"
 
 # --- Quality ---
 
@@ -64,6 +72,10 @@ test-all:
 # Run tests with coverage
 cover:
     mix test --cover
+
+# Run a specific test file
+t file:
+    mix test {{ file }}
 
 # Run credo (static analysis)
 lint:
