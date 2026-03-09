@@ -447,9 +447,10 @@ defmodule Quantok.WorldTest do
 
       {:ok, _tokenes} = World.fire_emitter(w, emitter.id)
       expected_id = emitter.id
-      assert_receive {:emit, ^expected_id, received_tokenes}
+      assert_receive {:emit, ^expected_id, received_tokenes, emit_rate}
       assert length(received_tokenes) == 1
       assert hd(received_tokenes).value == "test"
+      assert is_integer(emit_rate)
     end
   end
 end

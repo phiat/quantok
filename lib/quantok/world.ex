@@ -164,7 +164,7 @@ defmodule Quantok.World do
          {:ok, tokenes} <- Emitter.fire(node, Map.get(world.environment, :decay, %{})) do
       event = {:emitted, emitter_id, tokenes, now()}
       world = Event.apply(world, event)
-      broadcast(world, {:emit, emitter_id, tokenes})
+      broadcast(world, {:emit, emitter_id, tokenes, node.config.emit_rate})
       {:reply, {:ok, tokenes}, {world, [event | events]}}
     else
       nil -> {:reply, {:error, :not_found}, {world, events}}
@@ -184,7 +184,7 @@ defmodule Quantok.World do
           {:ok, tokenes} ->
             event = {:emitted, node.id, tokenes, now()}
             w = Event.apply(w, event)
-            broadcast(w, {:emit, node.id, tokenes})
+            broadcast(w, {:emit, node.id, tokenes, node.config.emit_rate})
             {tokenes ++ acc, w, [event | evts]}
 
           {:error, _} ->
@@ -377,7 +377,7 @@ defmodule Quantok.World do
         emit_event = {:emitted, collector_id, emitted_tokenes, now()}
         world = Event.apply(world, emit_event)
         broadcast(world, {:trigger, collector_id, output})
-        broadcast(world, {:emit, collector_id, emitted_tokenes})
+        broadcast(world, {:emit, collector_id, emitted_tokenes, 250})
         {world, [emit_event, event | events], output}
 
       {:paired, output, cleared, paired_emitter_id} ->
@@ -390,6 +390,12 @@ defmodule Quantok.World do
         world = Event.apply(world, event)
         broadcast(world, {:trigger, collector_id, output})
         {world, [event | events], output}
+
+      unexpected ->
+        # Defensive: log and skip if Collector.trigger returns unexpected shape
+        require Logger
+        Logger.warning("Unexpected trigger result for #{collector_id}: #{inspect(unexpected)}")
+        {world, events, nil}
     end
   end
 
@@ -413,7 +419,7 @@ defmodule Quantok.World do
             emit_event = {:emitted, paired_emitter_id, emitted_tokenes, now()}
             world = Event.apply(world, emit_event)
             broadcast(world, {:trigger, collector_id, output})
-            broadcast(world, {:emit, paired_emitter_id, emitted_tokenes})
+            broadcast(world, {:emit, paired_emitter_id, emitted_tokenes, emitter_config.emit_rate})
             {world, [emit_event, trig_event | events], output}
 
           {:error, _reason} ->

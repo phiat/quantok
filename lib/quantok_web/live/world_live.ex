@@ -409,8 +409,7 @@ defmodule QuantokWeb.WorldLive do
 
   # PubSub handlers
   @impl true
-  def handle_info({:emit, emitter_id, tokenes}, socket) do
-    rate = get_emit_rate(socket.assigns.world_pid, emitter_id)
+  def handle_info({:emit, emitter_id, tokenes, rate}, socket) do
 
     tokene_data =
       Enum.map(tokenes, fn t ->
@@ -695,12 +694,4 @@ defmodule QuantokWeb.WorldLive do
     end
   end
 
-  defp get_emit_rate(world_pid, emitter_id) do
-    world = World.get_state(world_pid)
-
-    case Map.get(world.nodes, emitter_id) do
-      %{config: %{emit_rate: rate}} -> rate
-      _ -> 250
-    end
-  end
 end
