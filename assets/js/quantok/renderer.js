@@ -195,6 +195,7 @@ export class WorldRenderer {
       opacity: 0.85,
     });
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
+    bodyMesh.userData = { isBody: true };
     group.add(bodyMesh);
 
     // Pipe spout for emitters
@@ -264,6 +265,11 @@ export class WorldRenderer {
         slot.userData = { slotIndex: i };
         group.add(slot);
       }
+    }
+
+    // Apply rotation for passive nodes (ramps, walls)
+    if (nodeType === "passive" && config.angle != null) {
+      group.rotation.z = -config.angle;
     }
 
     group.userData = { id, nodeType };
@@ -401,7 +407,7 @@ export class WorldRenderer {
   hitTestNode(screenX, screenY) {
     const world = this.screenToWorld(screenX, screenY);
     for (const [id, group] of this.nodeMeshes) {
-      const body = group.children[0];
+      const body = group.children.find(c => c.userData.isBody);
       if (!body || !body.geometry) continue;
       const params = body.geometry.parameters;
       const hw = params.width / 2;

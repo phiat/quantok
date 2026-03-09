@@ -12,7 +12,9 @@ defmodule Quantok.Chunker.Word do
   def chunk(<<>>), do: []
 
   def chunk(binary) when is_binary(binary) do
-    chunk(binary, " ")
+    binary
+    |> String.split(~r/\s+/)
+    |> Enum.reject(&(&1 == ""))
   end
 
   @doc """

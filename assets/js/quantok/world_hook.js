@@ -207,7 +207,7 @@ const WorldCanvas = {
     // Position above node
     const group = this.worldRenderer.nodeMeshes.get(nodeId);
     if (group) {
-      const body = group.children[0];
+      const body = group.children.find(c => c.userData?.isBody);
       const h = body?.geometry?.parameters?.height || 40;
       const screen = this.worldRenderer.worldToScreen(group.position.x, group.position.y + h / 2 + 8);
       const parentRect = this.el.parentElement.getBoundingClientRect();
@@ -227,7 +227,7 @@ const WorldCanvas = {
     const nodeGroup = this.worldRenderer.nodeMeshes.get(emitter_id);
     const baseX = nodeGroup ? nodeGroup.position.x : 0;
     // Pipe outlet: just below the emitter body (negate Y from Three.js back to Rapier)
-    const bodyH = nodeGroup?.children[0]?.geometry?.parameters?.height || 40;
+    const bodyH = nodeGroup?.children?.find(c => c.userData?.isBody)?.geometry?.parameters?.height || 40;
     const pipeLen = 20;
     const baseY = nodeGroup ? -nodeGroup.position.y + bodyH / 2 + pipeLen + 5 : -200;
 

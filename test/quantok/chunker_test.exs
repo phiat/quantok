@@ -75,6 +75,10 @@ defmodule Quantok.ChunkerTest do
       assert Chunker.Word.chunk("hello  world") == ["hello", "world"]
     end
 
+    test "splits on tabs and newlines" do
+      assert Chunker.Word.chunk("hello\tworld\nfoo") == ["hello", "world", "foo"]
+    end
+
     test "custom delimiter" do
       assert Chunker.Word.chunk("a,b,c", ",") == ["a", "b", "c"]
     end

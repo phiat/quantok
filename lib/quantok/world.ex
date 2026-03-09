@@ -37,11 +37,20 @@ defmodule Quantok.World do
     paused: false
   ]
 
+  @max_events 10_000
+
   # --- Client API ---
 
   def start_link(opts \\ []) do
     name = Keyword.get(opts, :name)
     GenServer.start_link(__MODULE__, opts, name: name)
+  end
+
+  @doc """
+  Start a world under the DynamicSupervisor with optional Registry name.
+  """
+  def start_supervised(opts \\ []) do
+    DynamicSupervisor.start_child(Quantok.WorldSupervisor, {__MODULE__, opts})
   end
 
   def get_state(server), do: GenServer.call(server, :get_state)
@@ -338,6 +347,7 @@ defmodule Quantok.World do
         end
       end)
 
+    events = if rem(world.tick_count, 300) == 0, do: cap_events(events), else: events
     {:noreply, {world, events}}
   end
 
@@ -444,6 +454,12 @@ defmodule Quantok.World do
   defp broadcast(%__MODULE__{id: world_id}, event) do
     Phoenix.PubSub.broadcast(Quantok.PubSub, "world:#{world_id}", event)
   end
+
+  defp cap_events(events) when length(events) > @max_events do
+    Enum.take(events, @max_events)
+  end
+
+  defp cap_events(events), do: events
 
   defp now, do: System.monotonic_time(:millisecond)
 

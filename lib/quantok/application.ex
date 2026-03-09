@@ -12,9 +12,8 @@ defmodule Quantok.Application do
       Quantok.Repo,
       {DNSCluster, query: Application.get_env(:quantok, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Quantok.PubSub},
-      # Start a worker by calling: Quantok.Worker.start_link(arg)
-      # {Quantok.Worker, arg},
-      # Start to serve requests, typically the last entry
+      {Registry, keys: :unique, name: Quantok.WorldRegistry},
+      {DynamicSupervisor, name: Quantok.WorldSupervisor, strategy: :one_for_one},
       QuantokWeb.Endpoint
     ]
 

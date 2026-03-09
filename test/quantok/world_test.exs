@@ -402,6 +402,39 @@ defmodule Quantok.WorldTest do
     end
   end
 
+  describe "event log compaction" do
+    test "events are capped after periodic tick", %{world: w} do
+      # Generate many events by firing emitters repeatedly
+      emitter = manual_emitter("a b c d e f g h i j", chunker: Quantok.Chunker.Word)
+      {:ok, _} = World.add_node(w, emitter)
+
+      for _ <- 1..100 do
+        {:ok, _} = World.fire_emitter(w, emitter.id)
+      end
+
+      events_before = World.get_events(w)
+      assert length(events_before) > 100
+
+      # Tick 300 times to trigger compaction
+      for _ <- 1..300 do
+        World.tick(w)
+      end
+      sync(w)
+
+      events_after = World.get_events(w)
+      assert length(events_after) <= 10_000
+    end
+  end
+
+  describe "supervised start" do
+    test "start_supervised creates a world under DynamicSupervisor" do
+      {:ok, pid} = World.start_supervised(world_name: "Supervised World")
+      state = World.get_state(pid)
+      assert state.name == "Supervised World"
+      DynamicSupervisor.terminate_child(Quantok.WorldSupervisor, pid)
+    end
+  end
+
   describe "pubsub events" do
     test "emitter fire broadcasts event", %{world: w} do
       state = World.get_state(w)
