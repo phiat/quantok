@@ -203,10 +203,8 @@ export class WorldRenderer {
       const pipeW = 6;
       const pipeH = 20;
       const pipeGeo = new THREE.PlaneGeometry(pipeW, pipeH);
-      const pipeMat = new THREE.MeshStandardMaterial({
+      const pipeMat = new THREE.MeshBasicMaterial({
         color,
-        roughness: 0.4,
-        metalness: 0.3,
         transparent: true,
         opacity: 0.9,
       });
@@ -247,6 +245,26 @@ export class WorldRenderer {
       const circle = new THREE.Mesh(circleGeo, circleMat);
       circle.position.z = -0.1;
       group.add(circle);
+    }
+
+    // Spout for collectors that emit
+    if (nodeType === "collector" && config.emit) {
+      const pipeW = 6;
+      const pipeH = 14;
+      const pipeGeo = new THREE.PlaneGeometry(pipeW, pipeH);
+      const pipeMat = new THREE.MeshBasicMaterial({
+        color: 0xffc49b,
+        transparent: true,
+        opacity: 0.7,
+      });
+      const pipe = new THREE.Mesh(pipeGeo, pipeMat);
+      pipe.position.y = -(height / 2 + pipeH / 2);
+      group.add(pipe);
+
+      const tipGeo = new THREE.PlaneGeometry(pipeW + 3, 2);
+      const tip = new THREE.Mesh(tipGeo, pipeMat.clone());
+      tip.position.y = -(height / 2 + pipeH);
+      group.add(tip);
     }
 
     // Buffer slots for collectors

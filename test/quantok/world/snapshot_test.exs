@@ -119,32 +119,61 @@ defmodule Quantok.World.SnapshotTest do
     File.rm_rf!(dir)
   end
 
-  test "snapshot preserves paired_emitter_id and output_mode", %{pid: pid} do
-    emitter = Emitter.new(command: "date", label: "source")
+  test "snapshot preserves emit config", %{pid: pid} do
     collector = Collector.new(
-      output_mode: :paired,
-      paired_emitter_id: emitter.id,
-      label: "paired collector"
+      emit: true,
+      output_chunker: Quantok.Chunker.Word,
+      emit_rate: 500,
+      label: "emit collector"
     )
 
-    World.add_node(pid, emitter)
     World.add_node(pid, collector)
 
     world = World.get_state(pid)
 
     # Verify raw JSON round-trip
     {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
-    collector_node = Enum.find(decoded["nodes"], &(&1["label"] == "paired collector"))
-    assert collector_node["config"]["paired_emitter_id"] == emitter.id
-    assert collector_node["config"]["output_mode"] == "paired"
+    collector_node = Enum.find(decoded["nodes"], &(&1["label"] == "emit collector"))
+    assert collector_node["config"]["emit"] == true
+    assert collector_node["config"]["emit_rate"] == 500
+    assert collector_node["config"]["output_chunker"] == "Quantok.Chunker.Word"
 
-    # Verify load_into round-trip — the deserialized struct must have :paired mode
+    # Verify load_into round-trip
     {:ok, pid2} = World.start_link(world_name: "Round-trip")
-    {:ok, 2} = Snapshot.load_into(pid2, decoded)
+    {:ok, 1} = Snapshot.load_into(pid2, decoded)
 
     loaded_world = World.get_state(pid2)
     loaded_collector = loaded_world.nodes |> Map.values() |> Enum.find(&(&1.type == :collector))
-    assert loaded_collector.config.output_mode == :paired
-    assert loaded_collector.config.paired_emitter_id == emitter.id
+    assert loaded_collector.config.emit == true
+    assert loaded_collector.config.emit_rate == 500
+    assert loaded_collector.config.output_chunker == Quantok.Chunker.Word
+  end
+
+  test "legacy snapshot with output_mode emit loads as emit: true", %{pid: pid} do
+    snapshot = %{
+      "version" => 1,
+      "name" => "Legacy",
+      "nodes" => [
+        %{
+          "type" => "collector",
+          "label" => "legacy",
+          "position" => %{"x" => 0.0, "y" => 0.0},
+          "config" => %{
+            "capacity" => 4,
+            "trigger_mode" => "on_full",
+            "action" => "Quantok.Node.Collector.Echo",
+            "command" => "echo",
+            "output_mode" => "emit",
+            "output_chunker" => "Quantok.Chunker.Word"
+          }
+        }
+      ]
+    }
+
+    {:ok, 1} = Snapshot.load_into(pid, snapshot)
+    world = World.get_state(pid)
+    collector = world.nodes |> Map.values() |> hd()
+    assert collector.config.emit == true
+    assert collector.config.output_chunker == Quantok.Chunker.Word
   end
 end

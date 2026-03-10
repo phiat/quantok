@@ -49,11 +49,22 @@ const WorldCanvas = {
     this._onMouseDownBound = (e) => this._onMouseDown(e);
     this._onMouseMoveBound = (e) => this._onMouseMove(e);
     this._onMouseUpBound = () => this._onMouseUp();
-    this._onMouseLeaveBound = () => { this._onMouseUp(); this._hideMenu(); };
+    this._onMouseLeaveBound = (e) => {
+      // Don't hide menu if mouse moved into the menu overlay
+      if (this._menu.contains(e.relatedTarget)) return;
+      this._onMouseUp();
+      this._hideMenu();
+    };
+    this._onMenuLeaveBound = (e) => {
+      // Hide menu when leaving it, unless re-entering the canvas
+      if (e.relatedTarget === this.el) return;
+      this._hideMenu();
+    };
     this.el.addEventListener("mousedown", this._onMouseDownBound);
     this.el.addEventListener("mousemove", this._onMouseMoveBound);
     this.el.addEventListener("mouseup", this._onMouseUpBound);
     this.el.addEventListener("mouseleave", this._onMouseLeaveBound);
+    this._menu.addEventListener("mouseleave", this._onMenuLeaveBound);
 
     // Replay any events that arrived during init
     this._ready = true;
@@ -98,7 +109,10 @@ const WorldCanvas = {
     this.el.removeEventListener("mousemove", this._onMouseMoveBound);
     this.el.removeEventListener("mouseup", this._onMouseUpBound);
     this.el.removeEventListener("mouseleave", this._onMouseLeaveBound);
-    if (this._menu && this._menu.parentElement) this._menu.remove();
+    if (this._menu) {
+      this._menu.removeEventListener("mouseleave", this._onMenuLeaveBound);
+      if (this._menu.parentElement) this._menu.remove();
+    }
     this.worldRenderer.dispose();
   },
 
@@ -113,7 +127,11 @@ const WorldCanvas = {
     }
 
     const id = this.worldRenderer.hitTestNode(e.clientX, e.clientY);
-    if (!id) { this._hideMenu(); return; }
+    if (!id) {
+      this._hideMenu();
+      this.pushEvent("deselect_node", {});
+      return;
+    }
     const group = this.worldRenderer.nodeMeshes.get(id);
     if (!group) return;
     const world = this.worldRenderer.screenToWorld(e.clientX, e.clientY);
@@ -122,6 +140,7 @@ const WorldCanvas = {
       offsetX: world.x - group.position.x,
       offsetY: world.y - group.position.y,
     };
+    this._dragMoved = false;
     this._hideMenu();
   },
 
@@ -133,6 +152,7 @@ const WorldCanvas = {
     }
 
     if (this._drag) {
+      this._dragMoved = true;
       const world = this.worldRenderer.screenToWorld(e.clientX, e.clientY);
       const nx = world.x - this._drag.offsetX;
       const ny = world.y - this._drag.offsetY;
@@ -163,13 +183,18 @@ const WorldCanvas = {
 
     if (this._drag) {
       const id = this._drag.nodeId;
-      const group = this.worldRenderer.nodeMeshes.get(id);
-      if (group) {
-        this.pushEvent("move_node", {
-          node_id: id,
-          x: group.position.x,
-          y: -group.position.y,
-        });
+      if (this._dragMoved) {
+        const group = this.worldRenderer.nodeMeshes.get(id);
+        if (group) {
+          this.pushEvent("move_node", {
+            node_id: id,
+            x: group.position.x,
+            y: -group.position.y,
+          });
+        }
+      } else {
+        // Click without drag = select node
+        this.pushEvent("select_node", { node_id: id });
       }
       this._drag = null;
     }
@@ -226,9 +251,10 @@ const WorldCanvas = {
   onEmitTokenes({ emitter_id, tokenes }) {
     const nodeGroup = this.worldRenderer.nodeMeshes.get(emitter_id);
     const baseX = nodeGroup ? nodeGroup.position.x : 0;
-    // Pipe outlet: just below the emitter body (negate Y from Three.js back to Rapier)
+    // Pipe outlet: just below the node body (negate Y from Three.js back to Rapier)
     const bodyH = nodeGroup?.children?.find(c => c.userData?.isBody)?.geometry?.parameters?.height || 40;
-    const pipeLen = 20;
+    const nodeInfo = this.nodeData.get(emitter_id);
+    const pipeLen = nodeInfo?.type === "collector" ? 14 : 20;
     const baseY = nodeGroup ? -nodeGroup.position.y + bodyH / 2 + pipeLen + 5 : -200;
 
     tokenes.forEach((t, i) => {

@@ -8,9 +8,9 @@ defmodule Quantok.Node.Collector do
   - :tick_interval - physics ticks between auto-triggers (if :timed)
   - :action - module that processes buffer contents on trigger
   - :command - command string passed to action
-  - :output_mode - :discard | :emit | :paired (what happens to action output)
-  - :output_chunker - chunker for re-emitting output as tokenes (if :emit)
-  - :paired_emitter_id - emitter to fire with output as command (if :paired)
+  - :emit - whether to re-emit processed output as new tokenes (boolean)
+  - :output_chunker - chunker for re-emitting output as tokenes (when emit is true)
+  - :emit_rate - ms between tokene emissions (when emit is true)
   """
 
   alias Quantok.{Node, Tokene}
@@ -28,9 +28,9 @@ defmodule Quantok.Node.Collector do
       tick_interval: Keyword.get(opts, :tick_interval, 120),
       action: Keyword.get(opts, :action, __MODULE__.Echo),
       command: Keyword.get(opts, :command, "echo"),
-      output_mode: Keyword.get(opts, :output_mode, :discard),
+      emit: Keyword.get(opts, :emit, false),
       output_chunker: Keyword.get(opts, :output_chunker, nil),
-      paired_emitter_id: Keyword.get(opts, :paired_emitter_id, nil),
+      emit_rate: Keyword.get(opts, :emit_rate, 250),
       buffer: [],
       ticks_since_trigger: 0
     }
@@ -77,31 +77,24 @@ defmodule Quantok.Node.Collector do
 
   @doc """
   Trigger the collector: process buffer contents and clear the buffer.
-  Returns `{:ok, output, cleared_node}` for :discard mode,
-  `{:ok, output, cleared_node, tokenes}` for :emit mode,
-  or `{:paired, output, cleared_node, paired_emitter_id}` for :paired mode.
+  Returns `{:ok, output, cleared_node}` when emit is false,
+  or `{:ok, output, cleared_node, tokenes}` when emit is true.
   """
   @spec trigger(Node.t()) ::
           {:ok, binary(), Node.t()}
           | {:ok, binary(), Node.t(), [Tokene.t()]}
-          | {:paired, binary(), Node.t(), binary()}
   def trigger(%Node{type: :collector, config: config} = node) do
     text = buffer_text(node)
     output = config.action.process(config.command, text)
     cleared = %{node | config: %{config | buffer: [], ticks_since_trigger: 0}}
 
-    case config.output_mode do
-      :emit when config.output_chunker != nil ->
-        chunks = config.output_chunker.chunk(output)
-        encoding = config.output_chunker.encoding()
-        tokenes = Enum.map(chunks, &Tokene.new(&1, encoding, source_id: node.id))
-        {:ok, output, cleared, tokenes}
-
-      :paired when config.paired_emitter_id != nil ->
-        {:paired, output, cleared, config.paired_emitter_id}
-
-      _ ->
-        {:ok, output, cleared}
+    if config.emit and config.output_chunker != nil do
+      chunks = config.output_chunker.chunk(output)
+      encoding = config.output_chunker.encoding()
+      tokenes = Enum.map(chunks, &Tokene.new(&1, encoding, source_id: node.id))
+      {:ok, output, cleared, tokenes}
+    else
+      {:ok, output, cleared}
     end
   end
 

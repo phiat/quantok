@@ -22,7 +22,13 @@ defmodule QuantokWeb.WorldLive do
     emitter = Emitter.new(command: "date", chunker: Quantok.Chunker.Word, position: {0.0, -300.0}, label: "date")
     World.add_node(world_pid, emitter)
 
-    collector = Collector.new(capacity: 8, position: {0.0, 250.0}, label: "Collector")
+    collector = Collector.new(
+      capacity: 8,
+      position: {0.0, 250.0},
+      label: "Collector",
+      emit: true,
+      output_chunker: Quantok.Chunker.Byte
+    )
     World.add_node(world_pid, collector)
 
     socket =
@@ -35,6 +41,9 @@ defmodule QuantokWeb.WorldLive do
       |> assign(:saved_worlds, list_saved_worlds())
       |> assign(:world_name, "Sandbox")
       |> assign(:decay_enabled, false)
+      |> assign(:decay_rate, 1.0)
+      |> assign(:decay_shatter, :split)
+      |> assign(:selected_node, nil)
       |> assign(:next_x, 0)
       |> push_node(floor)
       |> push_node(emitter)
@@ -59,6 +68,15 @@ defmodule QuantokWeb.WorldLive do
         <button phx-click="toggle_pause" class="q-tb">{if @paused, do: "resume", else: "pause"}</button>
         <button phx-click="clear_tokenes" class="q-tb">clear</button>
         <button phx-click="toggle_decay" class={"q-tb" <> if(@decay_enabled, do: " q-tb--active", else: "")}>{if @decay_enabled, do: "decay on", else: "decay off"}</button>
+        <span :if={@decay_enabled} class="q-decay-group">
+          <button :for={r <- [{0.5, "½×"}, {1.0, "1×"}, {2.0, "2×"}, {4.0, "4×"}]}
+            phx-click="set_decay_rate" phx-value-rate={elem(r, 0)}
+            class={"q-tb q-tb--sm" <> if(@decay_rate == elem(r, 0), do: " q-tb--active", else: "")}>{elem(r, 1)}</button>
+          <span class="q-sep"></span>
+          <button :for={s <- ["split", "dissolve", "explode", "fossilize"]}
+            phx-click="set_decay_shatter" phx-value-shatter={s}
+            class={"q-tb q-tb--sm" <> if(to_string(@decay_shatter) == s, do: " q-tb--active", else: "")}>{s}</button>
+        </span>
         <span class="q-sep"></span>
         <button phx-click="save_world" class="q-tb">save</button>
         <button :for={world <- @saved_worlds} phx-click="load_world" phx-value-name={world} class="q-tb q-tb--load">{world}</button>
@@ -86,7 +104,7 @@ defmodule QuantokWeb.WorldLive do
           <button phx-click="add_timed_collector" phx-value-capacity="8" phx-value-interval="120" class="q-btn q-btn--collect">timed · 4s</button>
           <button phx-click="add_emit_collector" phx-value-action="reverse" phx-value-capacity="4" phx-value-chunker="word" class="q-btn q-btn--collect">reverse · emit</button>
           <button phx-click="add_emit_collector" phx-value-action="upcase" phx-value-capacity="4" phx-value-chunker="word" class="q-btn q-btn--collect">upcase · emit</button>
-          <button phx-click="add_paired_collector" class="q-btn q-btn--collect">paired · emit</button>
+          <button phx-click="add_emit_collector" phx-value-action="echo" phx-value-capacity="4" phx-value-chunker="byte" class="q-btn q-btn--collect">echo · emit</button>
 
           <div class="q-section">Transformers</div>
           <button phx-click="add_transformer" phx-value-effect="splitter" class="q-btn q-btn--transform">splitter</button>
@@ -100,6 +118,14 @@ defmodule QuantokWeb.WorldLive do
           <button phx-click="add_passive" phx-value-shape="wall" class="q-btn q-btn--passive">wall</button>
           <button phx-click="add_passive" phx-value-shape="funnel" class="q-btn q-btn--passive">funnel</button>
         </nav>
+
+        <div :if={@selected_node} class="q-config">
+          <div class="q-config-header">
+            <span class="q-config-title">{@selected_node.label}</span>
+            <button phx-click="deselect_node" class="q-config-close">×</button>
+          </div>
+          {render_node_config(assigns)}
+        </div>
 
         <div class="q-canvas-wrap">
           <canvas id="world-canvas" phx-hook="WorldCanvas" class="w-full h-full" phx-update="ignore"></canvas>
@@ -124,6 +150,18 @@ defmodule QuantokWeb.WorldLive do
     new_enabled = !socket.assigns.decay_enabled
     World.set_decay(socket.assigns.world_pid, %{enabled: new_enabled})
     {:noreply, assign(socket, :decay_enabled, new_enabled)}
+  end
+
+  def handle_event("set_decay_rate", %{"rate" => rate_str}, socket) do
+    rate = String.to_float(rate_str)
+    World.set_decay(socket.assigns.world_pid, %{rate: rate})
+    {:noreply, assign(socket, :decay_rate, rate)}
+  end
+
+  def handle_event("set_decay_shatter", %{"shatter" => shatter}, socket) do
+    shatter_atom = shatter_atom(shatter)
+    World.set_decay(socket.assigns.world_pid, %{shatter: shatter_atom})
+    {:noreply, assign(socket, :decay_shatter, shatter_atom)}
   end
 
   @allowed_shell_commands ["date", "uname -a", "echo hello world", "hostname", "whoami", "uptime"]
@@ -222,7 +260,7 @@ defmodule QuantokWeb.WorldLive do
       Collector.new(
         capacity: capacity,
         action: action_mod,
-        output_mode: :emit,
+        emit: true,
         output_chunker: chunker_mod,
         position: {x, 250.0},
         label: label
@@ -230,42 +268,6 @@ defmodule QuantokWeb.WorldLive do
 
     {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
     {:noreply, socket |> push_node(collector) |> update(:node_count, &(&1 + 1))}
-  end
-
-  def handle_event("add_paired_collector", _params, socket) do
-    {x, socket} = next_x(socket)
-
-    # Create a Manual emitter at a lower position
-    emitter =
-      Emitter.new(
-        source: Quantok.Node.Emitter.Manual,
-        command: "",
-        chunker: Quantok.Chunker.Byte,
-        position: {x, -200.0},
-        label: "Paired source"
-      )
-
-    # Create a paired collector above it
-    collector =
-      Collector.new(
-        capacity: 4,
-        output_mode: :paired,
-        paired_emitter_id: emitter.id,
-        action: Collector.Echo,
-        position: {x, -50.0},
-        label: "Paired collector"
-      )
-
-    {:ok, _} = World.add_node(socket.assigns.world_pid, emitter)
-    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
-
-    socket =
-      socket
-      |> push_node(emitter)
-      |> push_node(collector)
-      |> update(:node_count, &(&1 + 2))
-
-    {:noreply, socket}
   end
 
   def handle_event("add_transformer", %{"effect" => effect}, socket) do
@@ -398,13 +400,48 @@ defmodule QuantokWeb.WorldLive do
     {:noreply, socket}
   end
 
+  def handle_event("select_node", %{"node_id" => id}, socket) do
+    world = World.get_state(socket.assigns.world_pid)
+
+    case Map.get(world.nodes, id) do
+      nil -> {:noreply, assign(socket, :selected_node, nil)}
+      node -> {:noreply, assign(socket, :selected_node, node)}
+    end
+  end
+
+  def handle_event("deselect_node", _params, socket) do
+    {:noreply, assign(socket, :selected_node, nil)}
+  end
+
+  def handle_event("update_node_config", params, socket) do
+    case socket.assigns.selected_node do
+      nil ->
+        {:noreply, socket}
+
+      node ->
+        updated_config = apply_config_changes(node, params)
+        {:ok, updated} = World.update_node(socket.assigns.world_pid, node.id, %{config: updated_config})
+        {:noreply, assign(socket, :selected_node, updated)}
+    end
+  end
+
   def handle_event("remove_node", %{"node_id" => id}, socket) do
     world = World.get_state(socket.assigns.world_pid)
     node = Map.get(world.nodes, id)
     World.remove_node(socket.assigns.world_pid, id)
 
     count_delta = if is_nil(node), do: 0, else: -1
-    {:noreply, update(socket, :node_count, &max(&1 + count_delta, 0))}
+
+    socket =
+      socket
+      |> update(:node_count, &max(&1 + count_delta, 0))
+      |> then(fn s ->
+        if s.assigns.selected_node && s.assigns.selected_node.id == id,
+          do: assign(s, :selected_node, nil),
+          else: s
+      end)
+
+    {:noreply, socket}
   end
 
   # PubSub handlers
@@ -523,6 +560,7 @@ defmodule QuantokWeb.WorldLive do
 
     {:ok, node_count} = Snapshot.load_into(socket.assigns.world_pid, snapshot)
     loaded_world = World.get_state(socket.assigns.world_pid)
+    decay = Map.get(loaded_world.environment, :decay, %{})
 
     socket
     |> push_event("clear_tokenes", %{})
@@ -530,9 +568,210 @@ defmodule QuantokWeb.WorldLive do
     |> assign(:tokene_count, 0)
     |> assign(:node_count, node_count)
     |> assign(:world_name, snapshot["name"] || name)
+    |> assign(:decay_enabled, Map.get(decay, :enabled, false))
+    |> assign(:decay_rate, Map.get(decay, :rate, 1.0))
+    |> assign(:decay_shatter, Map.get(decay, :shatter, :split))
     |> then(fn s ->
       Enum.reduce(Map.values(loaded_world.nodes), s, &push_node(&2, &1))
     end)
+  end
+
+  # --- Node config panel ---
+
+  defp render_node_config(%{selected_node: %{type: :emitter, config: config}} = assigns) do
+    assigns = assign(assigns, :config, config)
+
+    ~H"""
+    <div class="q-config-body">
+      <label class="q-cfg-label">command</label>
+      <form phx-change="update_node_config" phx-submit="update_node_config">
+        <input type="hidden" name="field" value="command" />
+        <input type="text" name="value" value={@config.command} class="q-cfg-input" phx-debounce="500" />
+      </form>
+
+      <label class="q-cfg-label">chunker</label>
+      <div class="q-cfg-btns">
+        <button :for={c <- ~w(bit byte rune word phrase sentence)}
+          phx-click="update_node_config" phx-value-field="chunker" phx-value-value={c}
+          class={"q-cfg-btn" <> if(module_label(@config.chunker) == c, do: " q-cfg-btn--active", else: "")}>{c}</button>
+      </div>
+
+      <label class="q-cfg-label">emit rate</label>
+      <div class="q-cfg-btns">
+        <button :for={r <- [50, 100, 250, 500]}
+          phx-click="update_node_config" phx-value-field="emit_rate" phx-value-value={r}
+          class={"q-cfg-btn" <> if(@config.emit_rate == r, do: " q-cfg-btn--active", else: "")}>{r}ms</button>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_node_config(%{selected_node: %{type: :collector, config: config}} = assigns) do
+    assigns = assign(assigns, :config, config)
+
+    ~H"""
+    <div class="q-config-body">
+      <label class="q-cfg-label">capacity</label>
+      <div class="q-cfg-btns">
+        <button :for={c <- [2, 4, 8, 16]}
+          phx-click="update_node_config" phx-value-field="capacity" phx-value-value={c}
+          class={"q-cfg-btn" <> if(@config.capacity == c, do: " q-cfg-btn--active", else: "")}>{c}</button>
+      </div>
+
+      <label class="q-cfg-label">trigger</label>
+      <div class="q-cfg-btns">
+        <button :for={t <- ~w(on_full manual timed)}
+          phx-click="update_node_config" phx-value-field="trigger_mode" phx-value-value={t}
+          class={"q-cfg-btn" <> if(to_string(@config.trigger_mode) == t, do: " q-cfg-btn--active", else: "")}>{t}</button>
+      </div>
+
+      <label class="q-cfg-label">action</label>
+      <div class="q-cfg-btns">
+        <button :for={a <- ~w(echo reverse upcase count)}
+          phx-click="update_node_config" phx-value-field="action" phx-value-value={a}
+          class={"q-cfg-btn" <> if(module_label(@config.action) == a, do: " q-cfg-btn--active", else: "")}>{a}</button>
+      </div>
+
+      <label class="q-cfg-label">emit</label>
+      <div class="q-cfg-btns">
+        <button phx-click="update_node_config" phx-value-field="emit" phx-value-value="true"
+          class={"q-cfg-btn" <> if(@config.emit, do: " q-cfg-btn--active", else: "")}>on</button>
+        <button phx-click="update_node_config" phx-value-field="emit" phx-value-value="false"
+          class={"q-cfg-btn" <> if(!@config.emit, do: " q-cfg-btn--active", else: "")}>off</button>
+      </div>
+
+      <div :if={@config.emit}>
+        <label class="q-cfg-label">output chunker</label>
+        <div class="q-cfg-btns">
+          <button :for={c <- ~w(byte rune word phrase sentence)}
+            phx-click="update_node_config" phx-value-field="output_chunker" phx-value-value={c}
+            class={"q-cfg-btn" <> if(module_label(@config.output_chunker) == c, do: " q-cfg-btn--active", else: "")}>{c}</button>
+        </div>
+
+        <label class="q-cfg-label">emit rate</label>
+        <div class="q-cfg-btns">
+          <button :for={r <- [50, 100, 250, 500]}
+            phx-click="update_node_config" phx-value-field="emit_rate" phx-value-value={r}
+            class={"q-cfg-btn" <> if(@config.emit_rate == r, do: " q-cfg-btn--active", else: "")}>{r}ms</button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_node_config(%{selected_node: %{type: :transformer, config: config}} = assigns) do
+    assigns = assign(assigns, :config, config)
+
+    ~H"""
+    <div class="q-config-body">
+      <label class="q-cfg-label">effect</label>
+      <div class="q-cfg-btns">
+        <button :for={e <- ~w(splitter heater cooler duplicator crusher)}
+          phx-click="update_node_config" phx-value-field="effect" phx-value-value={e}
+          class={"q-cfg-btn" <> if(to_string(@config.effect) == e, do: " q-cfg-btn--active", else: "")}>{e}</button>
+      </div>
+
+      <label class="q-cfg-label">radius</label>
+      <div class="q-cfg-btns">
+        <button :for={r <- [30, 60, 90, 120]}
+          phx-click="update_node_config" phx-value-field="radius" phx-value-value={r}
+          class={"q-cfg-btn" <> if(round(@config.radius) == r, do: " q-cfg-btn--active", else: "")}>{r}</button>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_node_config(%{selected_node: %{type: :passive, config: config}} = assigns) do
+    assigns = assign(assigns, :config, config)
+
+    ~H"""
+    <div class="q-config-body">
+      <label class="q-cfg-label">shape</label>
+      <div class="q-cfg-btns">
+        <button :for={s <- ~w(floor wall ramp funnel)}
+          phx-click="update_node_config" phx-value-field="shape" phx-value-value={s}
+          class={"q-cfg-btn" <> if(to_string(@config.shape) == s, do: " q-cfg-btn--active", else: "")}>{s}</button>
+      </div>
+
+      <label class="q-cfg-label">width</label>
+      <div class="q-cfg-btns">
+        <button :for={w <- [100, 200, 400, 800]}
+          phx-click="update_node_config" phx-value-field="width" phx-value-value={w}
+          class={"q-cfg-btn" <> if(round(@config.width) == w, do: " q-cfg-btn--active", else: "")}>{w}</button>
+      </div>
+    </div>
+    """
+  end
+
+  defp render_node_config(_assigns), do: nil
+
+  defp apply_config_changes(%{type: :emitter, config: config}, params) do
+    case params["field"] do
+      "command" -> %{config | command: params["value"] || config.command}
+      "chunker" -> %{config | chunker: chunker_module(params["value"])}
+      "emit_rate" -> %{config | emit_rate: parse_int(params["value"], config.emit_rate)}
+      _ -> config
+    end
+  end
+
+  defp apply_config_changes(%{type: :collector, config: config}, params) do
+    apply_collector_field(config, params["field"], params["value"])
+  end
+
+  defp apply_config_changes(%{type: :transformer, config: config}, params) do
+    case params["field"] do
+      "effect" -> %{config | effect: effect_atom(params["value"]) || config.effect}
+      "radius" -> %{config | radius: parse_float(params["value"], config.radius)}
+      _ -> config
+    end
+  end
+
+  defp apply_config_changes(%{type: :passive, config: config}, params) do
+    case params["field"] do
+      "shape" -> %{config | shape: shape_atom(params["value"]) || config.shape}
+      "width" -> %{config | width: parse_float(params["value"], config.width)}
+      _ -> config
+    end
+  end
+
+  defp apply_config_changes(%{config: config}, _params), do: config
+
+  defp apply_collector_field(config, "capacity", val), do: %{config | capacity: parse_int(val, config.capacity)}
+  defp apply_collector_field(config, "trigger_mode", val), do: %{config | trigger_mode: safe_trigger_mode(val)}
+  defp apply_collector_field(config, "action", val), do: %{config | action: collector_action(val)}
+  defp apply_collector_field(config, "output_chunker", val), do: %{config | output_chunker: chunker_module(val)}
+  defp apply_collector_field(config, "emit_rate", val), do: %{config | emit_rate: parse_int(val, config.emit_rate)}
+
+  defp apply_collector_field(config, "emit", val) do
+    emit = val == "true"
+    chunker = if emit and is_nil(config.output_chunker), do: Quantok.Chunker.Word, else: config.output_chunker
+    %{config | emit: emit, output_chunker: chunker}
+  end
+
+  defp apply_collector_field(config, _, _), do: config
+
+  defp module_label(nil), do: ""
+  defp module_label(mod) when is_atom(mod) do
+    mod |> to_string() |> String.split(".") |> List.last() |> String.downcase()
+  end
+
+  defp safe_trigger_mode("on_full"), do: :on_full
+  defp safe_trigger_mode("manual"), do: :manual
+  defp safe_trigger_mode("timed"), do: :timed
+  defp safe_trigger_mode(_), do: :on_full
+
+  defp parse_int(val, default) do
+    case Integer.parse(to_string(val)) do
+      {n, _} -> n
+      :error -> default
+    end
+  end
+
+  defp parse_float(val, default) do
+    case Float.parse(to_string(val)) do
+      {n, _} -> n
+      :error -> default
+    end
   end
 
   defp apply_shatter(socket, tid, :dissolve, _fragments) do
@@ -604,7 +843,7 @@ defmodule QuantokWeb.WorldLive do
     |> Map.take([
       :capacity, :shape, :angle, :friction, :restitution,
       :strength, :radius, :effect, :sensor_radius,
-      :trigger_mode, :output_mode, :tick_interval
+      :trigger_mode, :emit, :tick_interval
     ])
     |> Map.new(fn {k, v} -> {to_string(k), serialize_value(v)} end)
   end
@@ -642,6 +881,12 @@ defmodule QuantokWeb.WorldLive do
   defp collector_action("count"), do: Quantok.Node.Collector.Count
   defp collector_action("display"), do: Quantok.Node.Collector.Display
   defp collector_action(_), do: Quantok.Node.Collector.Echo
+
+  defp shatter_atom("split"), do: :split
+  defp shatter_atom("dissolve"), do: :dissolve
+  defp shatter_atom("explode"), do: :explode
+  defp shatter_atom("fossilize"), do: :fossilize
+  defp shatter_atom(_), do: :split
 
   defp chunker_module("bit"), do: Quantok.Chunker.Bit
   defp chunker_module("byte"), do: Quantok.Chunker.Byte

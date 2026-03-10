@@ -255,13 +255,13 @@ defmodule Quantok.WorldTest do
     end
   end
 
-  describe "emit output mode" do
-    test "trigger with emit mode creates new tokenes in world", %{world: w} do
+  describe "collector emit" do
+    test "trigger with emit creates new tokenes in world", %{world: w} do
       collector = Collector.new(
         capacity: 8,
         trigger_mode: :manual,
         action: Quantok.Node.Collector.Reverse,
-        output_mode: :emit,
+        emit: true,
         output_chunker: Quantok.Chunker.Byte
       )
       {:ok, _} = World.add_node(w, collector)
@@ -280,7 +280,7 @@ defmodule Quantok.WorldTest do
         capacity: 8,
         trigger_mode: :manual,
         action: Quantok.Node.Collector.Echo,
-        output_mode: :emit,
+        emit: true,
         output_chunker: Quantok.Chunker.Byte
       )
       {:ok, _} = World.add_node(w, collector)
@@ -291,6 +291,68 @@ defmodule Quantok.WorldTest do
       state = World.get_state(w)
       emitted = Map.values(state.tokenes)
       assert Enum.all?(emitted, &(&1.source_id == collector.id))
+    end
+
+    test "emit broadcasts with collector emit_rate", %{world: w} do
+      state = World.get_state(w)
+      Phoenix.PubSub.subscribe(Quantok.PubSub, "world:#{state.id}")
+
+      collector = Collector.new(
+        capacity: 8,
+        trigger_mode: :manual,
+        action: Quantok.Node.Collector.Echo,
+        emit: true,
+        output_chunker: Quantok.Chunker.Word,
+        emit_rate: 500
+      )
+      {:ok, _} = World.add_node(w, collector)
+      assert_receive {:node_added, _}
+
+      fill_collector(w, collector.id, "hello", chunker: Quantok.Chunker.Word)
+      {:ok, _} = World.trigger_collector(w, collector.id)
+
+      collector_id = collector.id
+      assert_receive {:emit, ^collector_id, _tokenes, 500}
+    end
+
+    test "collector rejects absorbing its own emitted tokenes", %{world: w} do
+      collector = Collector.new(
+        capacity: 2,
+        trigger_mode: :on_full,
+        emit: true,
+        output_chunker: Quantok.Chunker.Byte,
+        action: Quantok.Node.Collector.Echo
+      )
+      {:ok, _} = World.add_node(w, collector)
+      fill_collector(w, collector.id, "ab", chunker: Quantok.Chunker.Byte)
+
+      state = World.get_state(w)
+      emitted = Map.values(state.tokenes) |> hd()
+      assert emitted.source_id == collector.id
+
+      # Self-absorb should be rejected
+      assert {:error, :self} = World.absorb_tokene(w, collector.id, emitted.id)
+
+      # Another collector can absorb it
+      other = Collector.new(capacity: 8)
+      {:ok, _} = World.add_node(w, other)
+      assert {:ok, :ok} = World.absorb_tokene(w, other.id, emitted.id)
+    end
+
+    test "non-emit collector does not create tokenes", %{world: w} do
+      collector = Collector.new(
+        capacity: 8,
+        trigger_mode: :manual,
+        emit: false
+      )
+      {:ok, _} = World.add_node(w, collector)
+      fill_collector(w, collector.id, "hello", chunker: Quantok.Chunker.Word)
+
+      {:ok, output} = World.trigger_collector(w, collector.id)
+      assert output == "hello"
+
+      state = World.get_state(w)
+      assert state.tokenes == %{}
     end
   end
 
@@ -312,93 +374,6 @@ defmodule Quantok.WorldTest do
     test "returns empty list when no emitters", %{world: w} do
       {:ok, tokenes} = World.fire_all_emitters(w)
       assert tokenes == []
-    end
-  end
-
-  describe "emitter pairing" do
-    test "pair_nodes sets paired_emitter_id on collector", %{world: w} do
-      emitter = manual_emitter("test")
-      collector = Collector.new(output_mode: :paired)
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, _} = World.add_node(w, collector)
-
-      {:ok, updated} = World.pair_nodes(w, collector.id, emitter.id)
-      assert updated.config.paired_emitter_id == emitter.id
-
-      state = World.get_state(w)
-      assert state.nodes[collector.id].config.paired_emitter_id == emitter.id
-    end
-
-    test "pair_nodes returns error when collector not found", %{world: w} do
-      emitter = manual_emitter("test")
-      {:ok, _} = World.add_node(w, emitter)
-
-      assert {:error, :not_found} = World.pair_nodes(w, "fake-id", emitter.id)
-    end
-
-    test "pair_nodes returns error when emitter not found", %{world: w} do
-      collector = Collector.new(output_mode: :paired)
-      {:ok, _} = World.add_node(w, collector)
-
-      assert {:error, :not_found} = World.pair_nodes(w, collector.id, "fake-id")
-    end
-
-    test "triggering paired collector fires paired emitter", %{world: w} do
-      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "", chunker: Quantok.Chunker.Byte)
-      collector = Collector.new(
-        output_mode: :paired,
-        paired_emitter_id: emitter.id,
-        action: Quantok.Node.Collector.Reverse,
-        trigger_mode: :manual
-      )
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, _} = World.add_node(w, collector)
-
-      fill_collector(w, collector.id, "abc", chunker: Quantok.Chunker.Word)
-      {:ok, output} = World.trigger_collector(w, collector.id)
-
-      assert output == "cba"
-
-      state = World.get_state(w)
-      values = state.tokenes |> Map.values() |> Enum.map(& &1.value) |> Enum.sort()
-      assert values == ["a", "b", "c"]
-    end
-
-    test "paired trigger does not mutate emitter command in world state", %{world: w} do
-      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "original", chunker: Quantok.Chunker.Byte)
-      collector = Collector.new(
-        output_mode: :paired,
-        paired_emitter_id: emitter.id,
-        action: Quantok.Node.Collector.Reverse,
-        trigger_mode: :manual
-      )
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, _} = World.add_node(w, collector)
-
-      fill_collector(w, collector.id, "abc", chunker: Quantok.Chunker.Word)
-      {:ok, _output} = World.trigger_collector(w, collector.id)
-
-      state = World.get_state(w)
-      assert state.nodes[emitter.id].config.command == "original"
-    end
-
-    test "paired emitter tokenes have paired emitter as source_id", %{world: w} do
-      emitter = Emitter.new(source: Quantok.Node.Emitter.Manual, command: "", chunker: Quantok.Chunker.Byte)
-      collector = Collector.new(
-        output_mode: :paired,
-        paired_emitter_id: emitter.id,
-        action: Quantok.Node.Collector.Echo,
-        trigger_mode: :manual
-      )
-      {:ok, _} = World.add_node(w, emitter)
-      {:ok, _} = World.add_node(w, collector)
-
-      fill_collector(w, collector.id, "hi", chunker: Quantok.Chunker.Word)
-      {:ok, _output} = World.trigger_collector(w, collector.id)
-
-      state = World.get_state(w)
-      emitted = Map.values(state.tokenes)
-      assert Enum.all?(emitted, &(&1.source_id == emitter.id))
     end
   end
 

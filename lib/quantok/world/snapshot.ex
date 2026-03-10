@@ -171,18 +171,12 @@ defmodule Quantok.World.Snapshot do
       "tick_interval" => config.tick_interval,
       "action" => module_to_string(config.action),
       "command" => config.command,
-      "output_mode" => to_string(config.output_mode)
+      "emit" => config.emit,
+      "emit_rate" => config.emit_rate
     }
 
-    base =
-      if config.output_chunker do
-        Map.put(base, "output_chunker", module_to_string(config.output_chunker))
-      else
-        base
-      end
-
-    if config.paired_emitter_id do
-      Map.put(base, "paired_emitter_id", config.paired_emitter_id)
+    if config.output_chunker do
+      Map.put(base, "output_chunker", module_to_string(config.output_chunker))
     else
       base
     end
@@ -241,42 +235,23 @@ defmodule Quantok.World.Snapshot do
   @allowed_collector_commands ["echo", "cat", "wc -c", "wc -w", "wc -l"]
 
   defp deserialize_node(%{"type" => "collector"} = data) do
-    action = string_to_module(data["config"]["action"], :collector_action)
-    command = data["config"]["command"] || "echo"
-
-    # Shell action commands must be in the allowlist
-    safe_command =
-      if action == Quantok.Node.Collector.Shell and command not in @allowed_collector_commands do
-        "echo"
-      else
-        command
-      end
-
     config = data["config"]
-    output_chunker = if config["output_chunker"],
-      do: string_to_module(config["output_chunker"], :chunker),
-      else: nil
+    action = string_to_module(config["action"], :collector_action)
+    command = safe_collector_command(action, config["command"])
+    output_chunker = safe_optional_module(config["output_chunker"], :chunker)
 
-    opts = [
+    Collector.new(
       capacity: config["capacity"] || 8,
       trigger_mode: safe_trigger_mode(config["trigger_mode"]),
       tick_interval: config["tick_interval"] || 120,
       action: action,
-      command: safe_command,
-      output_mode: safe_output_mode(config["output_mode"]),
+      command: command,
+      emit: config["emit"] == true or config["output_mode"] in ["emit", "paired"],
       output_chunker: output_chunker,
+      emit_rate: config["emit_rate"] || 250,
       position: deserialize_position(data["position"]),
       label: data["label"] || "Collector"
-    ]
-
-    opts =
-      if config["paired_emitter_id"] do
-        Keyword.put(opts, :paired_emitter_id, config["paired_emitter_id"])
-      else
-        opts
-      end
-
-    Collector.new(opts)
+    )
   end
 
   defp deserialize_node(%{"type" => "transformer"} = data) do
@@ -345,11 +320,6 @@ defmodule Quantok.World.Snapshot do
   defp safe_trigger_mode("on_tick"), do: :timed
   defp safe_trigger_mode(_), do: :on_full
 
-  defp safe_output_mode("emit"), do: :emit
-  defp safe_output_mode("paired"), do: :paired
-  defp safe_output_mode("discard"), do: :discard
-  defp safe_output_mode(_), do: :discard
-
   defp safe_effect("splitter"), do: :splitter
   defp safe_effect("crusher"), do: :crusher
   defp safe_effect("heater"), do: :heater
@@ -366,6 +336,14 @@ defmodule Quantok.World.Snapshot do
   defp safe_shape("attractor"), do: :attractor
   defp safe_shape("repeller"), do: :repeller
   defp safe_shape(_), do: :floor
+
+  defp safe_collector_command(action, command) do
+    cmd = command || "echo"
+    if action == Quantok.Node.Collector.Shell and cmd not in @allowed_collector_commands, do: "echo", else: cmd
+  end
+
+  defp safe_optional_module(nil, _type), do: nil
+  defp safe_optional_module(str, type), do: string_to_module(str, type)
 
   defp module_to_string(mod), do: to_string(mod) |> String.replace_leading("Elixir.", "")
 

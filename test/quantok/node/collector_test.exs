@@ -10,6 +10,7 @@ defmodule Quantok.Node.CollectorTest do
       assert node.type == :collector
       assert node.config.capacity == 8
       assert node.config.buffer == []
+      assert node.config.emit == false
     end
 
     test "accepts custom capacity" do
@@ -105,10 +106,10 @@ defmodule Quantok.Node.CollectorTest do
     end
   end
 
-  describe "trigger/1 with emit mode" do
-    test "returns tokenes when output_mode is :emit with chunker" do
+  describe "trigger/1 with emit" do
+    test "returns tokenes when emit is true with chunker" do
       node = Collector.new(
-        output_mode: :emit,
+        emit: true,
         output_chunker: Quantok.Chunker.Word,
         action: Quantok.Node.Collector.Echo
       )
@@ -121,30 +122,14 @@ defmodule Quantok.Node.CollectorTest do
       assert Enum.map(tokenes, & &1.value) == ["hello", "world"]
     end
 
-    test "returns 3-tuple when output_mode is :discard" do
-      node = Collector.new(output_mode: :discard)
+    test "returns 3-tuple when emit is false" do
+      node = Collector.new(emit: false)
       {:ok, node} = Collector.absorb(node, Tokene.new("test", :word))
       {:ok, _output, _cleared} = Collector.trigger(node)
     end
-  end
 
-  describe "trigger/1 with paired mode" do
-    test "returns paired tuple when output_mode is :paired with paired_emitter_id" do
-      node = Collector.new(
-        output_mode: :paired,
-        paired_emitter_id: "emitter-123",
-        action: Quantok.Node.Collector.Reverse
-      )
-      {:ok, node} = Collector.absorb(node, Tokene.new("hello", :word))
-      {:paired, output, cleared, emitter_id} = Collector.trigger(node)
-
-      assert output == "olleh"
-      assert emitter_id == "emitter-123"
-      assert Collector.buffer_count(cleared) == 0
-    end
-
-    test "returns 3-tuple when paired_emitter_id is not set" do
-      node = Collector.new(output_mode: :paired)
+    test "returns 3-tuple when emit is true but no chunker set" do
+      node = Collector.new(emit: true, output_chunker: nil)
       {:ok, node} = Collector.absorb(node, Tokene.new("test", :word))
       {:ok, _output, _cleared} = Collector.trigger(node)
     end
