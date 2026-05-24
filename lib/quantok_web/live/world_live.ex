@@ -222,6 +222,8 @@ defmodule QuantokWeb.WorldLive do
       Collector.new(
         capacity: capacity,
         action: action_mod,
+        emit: true,
+        output_chunker: Quantok.Chunker.Byte,
         position: {x, 250.0},
         label: label
       )
