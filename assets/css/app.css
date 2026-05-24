@@ -111,7 +111,25 @@
   --q-peach: #ffc49b;
 }
 
-body { margin: 0; overflow: hidden; }
+body { margin: 0; overflow: hidden; background: var(--q-prussian); }
+
+/* SVG data-rain background — fills the viewport, sits behind everything */
+.q-bg-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--q-prussian);
+}
+.q-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* App content sits above the background */
+body > [data-phx-main], body > [data-phx-session] { position: relative; z-index: 1; }
 
 /* Top bar */
 .q-topbar {
@@ -178,7 +196,8 @@ body { margin: 0; overflow: hidden; }
 
 /* Sidebar */
 .q-sidebar {
-  width: 9rem;
+  flex: 0 0 9rem;
+  min-width: 9rem;
   background: var(--q-prussian);
   border-right: 1px solid var(--q-charcoal);
   padding: 0.5rem;
@@ -222,7 +241,8 @@ body { margin: 0; overflow: hidden; }
 .q-btn--passive { border-left: 2px solid var(--q-slate); }
 /* Node config panel */
 .q-config {
-  width: 10rem;
+  flex: 0 0 10rem;
+  min-width: 10rem;
   background: var(--q-prussian);
   border-right: 1px solid var(--q-charcoal);
   padding: 0.5rem;
@@ -303,8 +323,9 @@ body { margin: 0; overflow: hidden; }
 
 .q-canvas-wrap {
   flex: 1;
+  min-width: 0;
   position: relative;
-  background: var(--q-prussian);
+  background: transparent;
 }
 
 /* Node hover menu */

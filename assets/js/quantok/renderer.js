@@ -20,9 +20,9 @@ export class WorldRenderer {
     this.meshes = new Map();       // id -> THREE.Group (tokene bg + text)
     this.nodeMeshes = new Map();   // id -> THREE.Group (node)
 
-    // Scene
+    // Scene — transparent so the page-level SVG background shows through.
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(BG_COLOR);
+    this.scene.background = null;
 
     // Ortho camera
     const w = canvas.clientWidth || 1;
@@ -44,8 +44,9 @@ export class WorldRenderer {
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       antialias: true,
-      alpha: false,
+      alpha: true,
     });
+    this.renderer.setClearColor(0x000000, 0);
     this.resize();
 
     // Lighting (2.5D feel)

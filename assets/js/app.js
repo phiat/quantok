@@ -26,6 +26,7 @@ import {hooks as colocatedHooks} from "phoenix-colocated/quantok"
 import topbar from "../vendor/topbar"
 
 import WorldCanvas from "./quantok/world_hook"
+import { initBackground } from "./quantok/background"
 
 const Hooks = {
   ...colocatedHooks,
@@ -46,6 +47,13 @@ window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
+
+// One-shot SVG glyph populator for the page background.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initBackground)
+} else {
+  initBackground()
+}
 
 // expose liveSocket on window for web console debug logs and latency simulation:
 // >> liveSocket.enableDebug()
