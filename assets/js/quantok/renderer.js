@@ -14,12 +14,21 @@ import {
   ZOOM_MIN, ZOOM_MAX, ZOOM_SPEED, lerpColor,
 } from "./utils";
 
+// Below this rendered fontSize (in world px), text is too small to read
+// — skip the troika sync entirely and just show the colored rect.
+const MIN_TEXT_FONT_SIZE = 5;
+// Pool more than tokene cap so brief spikes (shatter cascades) don't churn.
+const MESH_POOL_CAP = 600;
+
 export class WorldRenderer {
   constructor(canvas) {
     this.canvas = canvas;
     this.meshes = new Map();       // id -> THREE.Group (tokene bg + text)
     this.nodeMeshes = new Map();   // id -> THREE.Group (node)
     this._highlights = new Map();  // id -> { halo, start, duration }
+    this._meshPool = [];           // recycled tokene meshes
+    // Shared unit geometry — bgMesh.scale.x/y carries actual size.
+    this._unitQuad = new THREE.PlaneGeometry(1, 1);
 
     // Scene
     this.scene = new THREE.Scene();
@@ -137,39 +146,64 @@ export class WorldRenderer {
 
   // --- Tokene rendering (troika SDF text) ---
 
-  /** Create a tokene mesh (colored bg + SDF text) */
+  /** Create a tokene mesh (colored bg + SDF text). Recycles from pool when possible. */
   createTokeneMesh(id, value, encoding, width, height) {
     const color = ENCODING_COLORS[encoding] || DEFAULT_COLOR;
-    const group = new THREE.Group();
+    const pooled = this._meshPool.pop();
+    const { group, bgMesh, text } = pooled || this._buildTokeneMesh();
 
-    // Background rect
-    const bgGeo = new THREE.PlaneGeometry(width, height);
-    const bgMat = new THREE.MeshBasicMaterial({ color });
-    const bgMesh = new THREE.Mesh(bgGeo, bgMat);
-    bgMesh.position.z = 0;
-    group.add(bgMesh);
+    // Reset bg
+    bgMesh.scale.set(width, height, 1);
+    bgMesh.material.color.setHex(color);
+    bgMesh.material.opacity = 1.0;
+    bgMesh.material.transparent = false;
 
-    // SDF text \u2014 render the full value; the box is sized to fit it on the server.
-    const displayText = value;
+    // Text \u2014 skip troika sync when it would be unreadable anyway
+    const displayText = value || "";
     const fontSize = displayText.length > 0
       ? Math.min(height * 0.85, width / (displayText.length * 0.6))
       : height * 0.7;
+    const targetSize = Math.max(fontSize, 4);
+
+    if (targetSize < MIN_TEXT_FONT_SIZE || displayText.length === 0) {
+      text.visible = false;
+    } else {
+      text.visible = true;
+      if (text.text !== displayText) text.text = displayText;
+      if (text.fontSize !== targetSize) text.fontSize = targetSize;
+      text.sync();
+    }
+
+    group.position.set(0, 0, 0);
+    group.rotation.z = 0;
+    group.userData.id = id;
+    group.userData.encoding = encoding;
+    group.userData.value = value;
+    group.userData.baseColor = color;
+
+    this.scene.add(group);
+    this.meshes.set(id, group);
+    return group;
+  }
+
+  /** Construct a fresh poolable tokene mesh group. Called only on pool miss. */
+  _buildTokeneMesh() {
+    const group = new THREE.Group();
+    const bgMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const bgMesh = new THREE.Mesh(this._unitQuad, bgMat);
+    bgMesh.position.z = 0;
+    group.add(bgMesh);
 
     const text = new Text();
-    text.text = displayText;
-    text.fontSize = Math.max(fontSize, 4);
     text.color = BG_COLOR;
     text.anchorX = "center";
     text.anchorY = "middle";
     text.fontWeight = "bold";
     text.position.z = 0.1;
-    text.sync();
     group.add(text);
 
-    group.userData = { id, encoding, value, bgMesh, baseColor: color };
-    this.scene.add(group);
-    this.meshes.set(id, group);
-    return group;
+    group.userData = { bgMesh, text };
+    return { group, bgMesh, text };
   }
 
   // --- Node rendering ---
@@ -432,21 +466,34 @@ export class WorldRenderer {
 
   // --- Removal ---
 
-  /** Remove a tokene mesh */
+  /**
+   * Remove a tokene mesh — recycles into the pool instead of disposing so
+   * the next spawn skips geometry/material/text construction entirely.
+   * Disposes only when the pool is full.
+   */
   removeTokene(id) {
     const group = this.meshes.get(id);
-    if (group) {
-      this.scene.remove(group);
+    if (!group) return;
+    this.scene.remove(group);
+    this.meshes.delete(id);
+
+    const { bgMesh, text } = group.userData;
+    if (bgMesh && text && this._meshPool.length < MESH_POOL_CAP) {
+      // Hide text so a brief gap between pool-return and next-acquire doesn't
+      // leave troika trying to sync stale state on a detached group.
+      text.visible = false;
+      this._meshPool.push({ group, bgMesh, text });
+    } else {
+      // Pool full (or malformed) — actually dispose.
       group.traverse((child) => {
-        if (child.geometry) child.geometry.dispose();
+        // Skip the shared unit-quad geometry — never dispose it.
+        if (child.geometry && child.geometry !== this._unitQuad) child.geometry.dispose();
         if (child.material) {
           if (child.material.map) child.material.map.dispose();
           child.material.dispose();
         }
-        // troika Text cleanup
         if (child.dispose) child.dispose();
       });
-      this.meshes.delete(id);
     }
   }
 
