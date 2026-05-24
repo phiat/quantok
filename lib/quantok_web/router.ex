@@ -17,8 +17,7 @@ defmodule QuantokWeb.Router do
   scope "/", QuantokWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
-    live "/world", WorldLive
+    live "/", WorldLive
   end
 
   # Other scopes may use custom stacks.

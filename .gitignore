@@ -44,10 +44,6 @@ npm-debug.log
 *.db-shm
 *.db-wal
 
-# Tiktokenex build artifacts
-/tiktokenex/_build/
-/tiktokenex/deps/
-
 # Claude Code memory (per-user)
 .claude/
 
@@ -59,7 +55,3 @@ AGENTS.md
 
 # Local tool version pins (per-user)
 mise.toml
-
-# Tiktokenex extracted to its own repo; local dir still satisfies the
-# path dep in mix.exs until that's repointed. Not tracked here.
-/tiktokenex/

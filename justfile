@@ -6,12 +6,11 @@ default:
 
 # --- Setup ---
 
-# Install all dependencies (elixir + tiktokenex + npm + ranks)
+# Install all dependencies (elixir + npm)
+# Requires sibling ../tiktokenex repo to be cloned and set up first
 setup:
     mix deps.get
-    cd tiktokenex && mix deps.get
     cd assets && npm install
-    cd tiktokenex && just download-ranks
     mix ecto.create
 
 # Create and migrate database
@@ -53,24 +52,12 @@ worlds:
 
 # --- Quality ---
 
-# Run all checks (test + credo + compile warnings) for both projects
-check: check-quantok check-ttex
+# Run all checks (test + credo + compile warnings)
+check: test lint compile-check
 
-# Run Quantok checks
-check-quantok: test lint compile-check
-
-# Run tiktokenex checks
-check-ttex:
-    cd tiktokenex && just check
-
-# Run Quantok tests
+# Run tests
 test *args='':
     mix test {{ args }}
-
-# Run all tests (Quantok + tiktokenex)
-test-all:
-    mix test
-    cd tiktokenex && mix test
 
 # Run tests with coverage
 cover:
@@ -91,12 +78,10 @@ compile-check:
 # Format all code
 fmt:
     mix format
-    cd tiktokenex && mix format
 
 # Check formatting without changing files
 fmt-check:
     mix format --check-formatted
-    cd tiktokenex && mix format --check-formatted
 
 # --- Build ---
 
@@ -114,30 +99,21 @@ clean:
     mix clean
     rm -rf _build
 
-# Full clean (deps + build + tiktokenex + node_modules)
+# Full clean (deps + build + node_modules)
 nuke:
     mix clean
     rm -rf _build deps
     cd assets && rm -rf node_modules
-    cd tiktokenex && rm -rf _build deps
 
 # --- Beads (Issue Tracking) ---
 
-# List all Quantok issues
+# List all issues
 issues:
     bd list
 
-# List tiktokenex issues
-issues-ttex:
-    cd tiktokenex && bd list
-
-# Show ready-to-work issues (both projects)
+# Show ready-to-work issues
 ready:
-    @echo "=== Quantok ==="
     @bd ready
-    @echo ""
-    @echo "=== Tiktokenex ==="
-    @cd tiktokenex && bd ready
 
 # Show blocked issues
 blocked:
@@ -145,11 +121,7 @@ blocked:
 
 # Project stats
 stats:
-    @echo "=== Quantok ==="
     @bd stats
-    @echo ""
-    @echo "=== Tiktokenex ==="
-    @cd tiktokenex && bd stats
 
 # --- Generators ---
 
