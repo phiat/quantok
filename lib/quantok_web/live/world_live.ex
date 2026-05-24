@@ -595,20 +595,20 @@ defmodule QuantokWeb.WorldLive do
       <label class="q-cfg-label">command</label>
       <form phx-change="update_node_config" phx-submit="update_node_config">
         <input type="hidden" name="field" value="command" />
-        <input type="text" name="value" value={@config.command} class="q-cfg-input" phx-debounce="500" />
+        <input type="text" name="val" value={@config.command} class="q-cfg-input" phx-debounce="500" />
       </form>
 
       <label class="q-cfg-label">chunker</label>
       <div class="q-cfg-btns">
         <button :for={c <- ~w(bit byte rune word phrase sentence)}
-          phx-click="update_node_config" phx-value-field="chunker" phx-value-value={c}
+          phx-click="update_node_config" phx-value-field="chunker" phx-value-val={c}
           class={"q-cfg-btn" <> if(module_label(@config.chunker) == c, do: " q-cfg-btn--active", else: "")}>{c}</button>
       </div>
 
       <label class="q-cfg-label">emit rate</label>
       <div class="q-cfg-btns">
         <button :for={r <- [50, 100, 250, 500]}
-          phx-click="update_node_config" phx-value-field="emit_rate" phx-value-value={r}
+          phx-click="update_node_config" phx-value-field="emit_rate" phx-value-val={r}
           class={"q-cfg-btn" <> if(@config.emit_rate == r, do: " q-cfg-btn--active", else: "")}>{r}ms</button>
       </div>
     </div>
@@ -623,29 +623,29 @@ defmodule QuantokWeb.WorldLive do
       <label class="q-cfg-label">capacity</label>
       <div class="q-cfg-btns">
         <button :for={c <- [2, 4, 8, 16]}
-          phx-click="update_node_config" phx-value-field="capacity" phx-value-value={c}
+          phx-click="update_node_config" phx-value-field="capacity" phx-value-val={c}
           class={"q-cfg-btn" <> if(@config.capacity == c, do: " q-cfg-btn--active", else: "")}>{c}</button>
       </div>
 
       <label class="q-cfg-label">trigger</label>
       <div class="q-cfg-btns">
         <button :for={t <- ~w(on_full manual timed)}
-          phx-click="update_node_config" phx-value-field="trigger_mode" phx-value-value={t}
+          phx-click="update_node_config" phx-value-field="trigger_mode" phx-value-val={t}
           class={"q-cfg-btn" <> if(to_string(@config.trigger_mode) == t, do: " q-cfg-btn--active", else: "")}>{t}</button>
       </div>
 
       <label class="q-cfg-label">action</label>
       <div class="q-cfg-btns">
         <button :for={a <- ~w(echo reverse upcase count)}
-          phx-click="update_node_config" phx-value-field="action" phx-value-value={a}
+          phx-click="update_node_config" phx-value-field="action" phx-value-val={a}
           class={"q-cfg-btn" <> if(module_label(@config.action) == a, do: " q-cfg-btn--active", else: "")}>{a}</button>
       </div>
 
       <label class="q-cfg-label">emit</label>
       <div class="q-cfg-btns">
-        <button phx-click="update_node_config" phx-value-field="emit" phx-value-value="true"
+        <button phx-click="update_node_config" phx-value-field="emit" phx-value-val="true"
           class={"q-cfg-btn" <> if(@config.emit, do: " q-cfg-btn--active", else: "")}>on</button>
-        <button phx-click="update_node_config" phx-value-field="emit" phx-value-value="false"
+        <button phx-click="update_node_config" phx-value-field="emit" phx-value-val="false"
           class={"q-cfg-btn" <> if(!@config.emit, do: " q-cfg-btn--active", else: "")}>off</button>
       </div>
 
@@ -653,14 +653,14 @@ defmodule QuantokWeb.WorldLive do
         <label class="q-cfg-label">output chunker</label>
         <div class="q-cfg-btns">
           <button :for={c <- ~w(byte rune word phrase sentence)}
-            phx-click="update_node_config" phx-value-field="output_chunker" phx-value-value={c}
+            phx-click="update_node_config" phx-value-field="output_chunker" phx-value-val={c}
             class={"q-cfg-btn" <> if(module_label(@config.output_chunker) == c, do: " q-cfg-btn--active", else: "")}>{c}</button>
         </div>
 
         <label class="q-cfg-label">emit rate</label>
         <div class="q-cfg-btns">
           <button :for={r <- [50, 100, 250, 500]}
-            phx-click="update_node_config" phx-value-field="emit_rate" phx-value-value={r}
+            phx-click="update_node_config" phx-value-field="emit_rate" phx-value-val={r}
             class={"q-cfg-btn" <> if(@config.emit_rate == r, do: " q-cfg-btn--active", else: "")}>{r}ms</button>
         </div>
       </div>
@@ -676,14 +676,14 @@ defmodule QuantokWeb.WorldLive do
       <label class="q-cfg-label">effect</label>
       <div class="q-cfg-btns">
         <button :for={e <- ~w(splitter heater cooler duplicator crusher)}
-          phx-click="update_node_config" phx-value-field="effect" phx-value-value={e}
+          phx-click="update_node_config" phx-value-field="effect" phx-value-val={e}
           class={"q-cfg-btn" <> if(to_string(@config.effect) == e, do: " q-cfg-btn--active", else: "")}>{e}</button>
       </div>
 
       <label class="q-cfg-label">radius</label>
       <div class="q-cfg-btns">
         <button :for={r <- [30, 60, 90, 120]}
-          phx-click="update_node_config" phx-value-field="radius" phx-value-value={r}
+          phx-click="update_node_config" phx-value-field="radius" phx-value-val={r}
           class={"q-cfg-btn" <> if(round(@config.radius) == r, do: " q-cfg-btn--active", else: "")}>{r}</button>
       </div>
     </div>
@@ -698,14 +698,14 @@ defmodule QuantokWeb.WorldLive do
       <label class="q-cfg-label">shape</label>
       <div class="q-cfg-btns">
         <button :for={s <- ~w(floor wall ramp funnel)}
-          phx-click="update_node_config" phx-value-field="shape" phx-value-value={s}
+          phx-click="update_node_config" phx-value-field="shape" phx-value-val={s}
           class={"q-cfg-btn" <> if(to_string(@config.shape) == s, do: " q-cfg-btn--active", else: "")}>{s}</button>
       </div>
 
       <label class="q-cfg-label">width</label>
       <div class="q-cfg-btns">
         <button :for={w <- [100, 200, 400, 800]}
-          phx-click="update_node_config" phx-value-field="width" phx-value-value={w}
+          phx-click="update_node_config" phx-value-field="width" phx-value-val={w}
           class={"q-cfg-btn" <> if(round(@config.width) == w, do: " q-cfg-btn--active", else: "")}>{w}</button>
       </div>
     </div>
@@ -716,29 +716,29 @@ defmodule QuantokWeb.WorldLive do
 
   defp apply_config_changes(%{type: :emitter, config: config}, params) do
     case params["field"] do
-      "command" -> %{config | command: params["value"] || config.command}
-      "chunker" -> %{config | chunker: chunker_module(params["value"])}
-      "emit_rate" -> %{config | emit_rate: parse_int(params["value"], config.emit_rate)}
+      "command" -> %{config | command: params["val"] || config.command}
+      "chunker" -> %{config | chunker: chunker_module(params["val"])}
+      "emit_rate" -> %{config | emit_rate: parse_int(params["val"], config.emit_rate)}
       _ -> config
     end
   end
 
   defp apply_config_changes(%{type: :collector, config: config}, params) do
-    apply_collector_field(config, params["field"], params["value"])
+    apply_collector_field(config, params["field"], params["val"])
   end
 
   defp apply_config_changes(%{type: :transformer, config: config}, params) do
     case params["field"] do
-      "effect" -> %{config | effect: effect_atom(params["value"]) || config.effect}
-      "radius" -> %{config | radius: parse_float(params["value"], config.radius)}
+      "effect" -> %{config | effect: effect_atom(params["val"]) || config.effect}
+      "radius" -> %{config | radius: parse_float(params["val"], config.radius)}
       _ -> config
     end
   end
 
   defp apply_config_changes(%{type: :passive, config: config}, params) do
     case params["field"] do
-      "shape" -> %{config | shape: shape_atom(params["value"]) || config.shape}
-      "width" -> %{config | width: parse_float(params["value"], config.width)}
+      "shape" -> %{config | shape: shape_atom(params["val"]) || config.shape}
+      "width" -> %{config | width: parse_float(params["val"], config.width)}
       _ -> config
     end
   end
