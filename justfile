@@ -25,8 +25,11 @@ db-reset:
 # --- Development ---
 
 # Start Phoenix server with IEx
-dev:
+run:
     iex -S mix phx.server
+
+# Alias for `just run`
+dev: run
 
 # Start without interactive shell
 serve:

@@ -47,15 +47,15 @@ See [docs/architecture.md](docs/architecture.md) for the full module map and dat
 
 The core mechanic. The same data chunked at different granularities produces tokenes with different physical properties:
 
-| Encoding | Chunker   | Feel     | Example: "Hello"              |
-|----------|-----------|----------|-------------------------------|
-| bit      | Bit       | sand     | "0","1","0","0","1",...        |
-| byte     | Byte      | gravel   | "H","e","l","l","o"           |
-| rune     | Rune      | pebble   | "H","e","l","l","o"           |
-| token    | BPE       | stone    | "Hello"                       |
-| word     | Word      | brick    | "Hello"                       |
-| phrase   | Phrase    | block    | "Hello"                       |
-| sentence | Sentence  | boulder  | "Hello"                       |
+| Encoding | Chunker   | Feel     | Example: `"Hi World! Quantok"`                            |
+|----------|-----------|----------|-----------------------------------------------------------|
+| bit      | Bit       | sand     | `0 1 0 0 1 0 0 0 …` (136 bits)                            |
+| byte     | Byte      | gravel   | `"H" "i" " " "W" "o" "r" "l" "d" "!" " " "Q" "u" …` (17)  |
+| rune     | Rune      | pebble   | `"H" "i" " " "W" "o" "r" "l" "d" "!" " " "Q" "u" …` (17)  |
+| token    | BPE       | stone    | `"Hi" " World" "!" " Quant" "ok"` (5)                     |
+| word     | Word      | brick    | `"Hi" "World!" "Quantok"` (3)                             |
+| phrase   | Phrase    | block    | `"Hi World! Quantok"` (1)                                 |
+| sentence | Sentence  | boulder  | `"Hi World!" "Quantok"` (2)                               |
 
 Smaller chunks = lighter, more numerous. Larger chunks = heavier, fewer. A sentence-boulder behaves very differently from a stream of bit-sand.
 
@@ -92,10 +92,6 @@ After triggering, the output mode controls what happens to the result:
 
 See [docs/collector-buffers.md](docs/collector-buffers.md) for the full redesign plan including emitter pairing, configurable ports, typed slots, and encoding-aware fit-or-bounce mechanics.
 
-## Tiktokenex
-
-Quantok includes a standalone pure-Elixir BPE tokenizer compatible with OpenAI's tiktoken encodings (cl100k_base, o200k_base). No NIFs required. See [tiktokenex/](tiktokenex/).
-
 ## Development
 
 ```bash
@@ -113,9 +109,8 @@ just fmt        # format all code
 | Rendering | Three.js, troika-three-text         |
 | Physics   | Rapier2D (WASM)                     |
 | PostFX    | Three.js EffectComposer, bloom      |
-| Tokenizer | Tiktokenex (pure Elixir BPE)        |
 | Database  | SQLite (dev) / Postgres (prod)      |
-| Quality   | Credo, ExUnit (161 tests)           |
+| Quality   | Credo, ExUnit                       |
 | Tasks     | just                                |
 
 ## License
