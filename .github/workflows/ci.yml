@@ -38,13 +38,13 @@ jobs:
         id: ranks-cache
         uses: actions/cache@v4
         with:
-          path: _build/test/lib/tiktokenex/priv/ranks
+          path: deps/tiktokenex/priv/ranks
           key: tiktoken-ranks-cl100k-o200k
 
       - name: Download BPE rank files
         if: steps.ranks-cache.outputs.cache-hit != 'true'
         run: |
-          dir="_build/test/lib/tiktokenex/priv/ranks"
+          dir="deps/tiktokenex/priv/ranks"
           mkdir -p "$dir"
           curl -fsSL "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken" -o "$dir/cl100k_base.tiktoken"
           curl -fsSL "https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken" -o "$dir/o200k_base.tiktoken"
