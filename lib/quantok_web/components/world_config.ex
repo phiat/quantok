@@ -285,7 +285,7 @@ defmodule QuantokWeb.WorldConfig do
         <label class="q-cfg-label">channel</label>
         <div class="q-cfg-btns">
           <button
-            :for={c <- ~w(A B C D)}
+            :for={c <- ~w(A B C D E F)}
             phx-click="update_node_config"
             phx-value-field="channel"
             phx-value-val={c}

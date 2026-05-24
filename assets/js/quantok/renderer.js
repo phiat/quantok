@@ -26,6 +26,8 @@ const PORTAL_CHANNEL_COLORS = {
   B: 0xffc49b,
   C: 0xadb6c4,
   D: 0xcc66cc,
+  E: 0x55ddaa,
+  F: 0xffd166,
 };
 function portalChannelColor(ch) {
   return PORTAL_CHANNEL_COLORS[ch] || 0xffefd3;

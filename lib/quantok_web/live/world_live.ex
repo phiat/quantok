@@ -317,6 +317,39 @@ defmodule QuantokWeb.WorldLive do
     end
   end
 
+  def handle_event("add_passive", %{"shape" => "portal"}, socket) do
+    world = World.get_state(socket.assigns.world_pid)
+
+    used =
+      world.nodes
+      |> Map.values()
+      |> Enum.filter(&(&1.type == :passive and &1.config.shape == :portal))
+      |> Enum.map(& &1.config.channel)
+      |> MapSet.new()
+
+    case Enum.find(~w(A B C D E F), &(not MapSet.member?(used, &1))) do
+      nil ->
+        # All six channels already in use — silently no-op.
+        {:noreply, socket}
+
+      channel ->
+        {x1, socket} = next_x(socket, 100.0)
+        portal1 = Passive.new(:portal, channel: channel, position: {x1, 100.0})
+        {:ok, _} = World.add_node(socket.assigns.world_pid, portal1)
+
+        {x2, socket} = next_x(socket, 100.0)
+        portal2 = Passive.new(:portal, channel: channel, position: {x2, 100.0})
+        {:ok, _} = World.add_node(socket.assigns.world_pid, portal2)
+
+        {:noreply,
+         socket
+         |> push_node(portal1)
+         |> push_node(portal2)
+         |> update(:node_count, &(&1 + 2))
+         |> assign(:selected_node, portal2)}
+    end
+  end
+
   def handle_event("add_passive", %{"shape" => shape} = params, socket) do
     case shape_atom(shape) do
       nil ->

@@ -218,16 +218,10 @@ defmodule QuantokWeb.WorldSidebar do
         params={%{"shape" => "conveyor", "speed" => "-80"}}
       />
       <.item
-        label="portal · A"
+        label="portal"
         variant="passive"
         event="add_passive"
-        params={%{"shape" => "portal", "channel" => "A"}}
-      />
-      <.item
-        label="portal · B"
-        variant="passive"
-        event="add_passive"
-        params={%{"shape" => "portal", "channel" => "B"}}
+        params={%{"shape" => "portal"}}
       />
     </nav>
     """
