@@ -13,7 +13,7 @@
       "position": {"x": 0.0, "y": -320.0},
       "config": {
         "source": "Quantok.Node.Emitter.Shell",
-        "command": "mise list",
+        "command": "mise list | awk '{print $1, $2}'",
         "chunker": "Quantok.Chunker.Word",
         "emit_rate": 140,
         "auto_repeat": true,

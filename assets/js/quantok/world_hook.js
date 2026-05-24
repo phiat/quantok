@@ -35,6 +35,13 @@ const WorldCanvas = {
     this._pendingTimeouts = [];
     this._ready = false;
     this._eventQueue = [];
+    // Performance: cap tokenes alive at once. When exceeded, oldest are
+    // evicted (FIFO by insertion order in tokeneData).
+    this.maxTokenes = 500;
+    // FPS tracking
+    this._fpsFrames = 0;
+    this._fpsLast = performance.now();
+    this._fpsEl = document.getElementById("q-fps");
 
     // Register event handlers BEFORE async init so mount-time push_events are captured
     this.handleEvent("emit_tokenes", (data) => this._dispatch("emit_tokenes", data));
@@ -301,6 +308,7 @@ const WorldCanvas = {
         this.physics.spawnTokene(t.id, baseX, baseY, hw, hh, t.mass);
         this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
         this.tokeneData.set(t.id, { ...t, _spawnedAt: performance.now() });
+        this._enforceTokeneCap();
       }, i * (t.emit_rate || 100));
       this._pendingTimeouts.push(timer);
     });
@@ -361,6 +369,7 @@ const WorldCanvas = {
         if (body) body.setBodyType(this.rapier.RigidBodyType.Fixed);
       }
     });
+    this._enforceTokeneCap();
   },
 
   onTransformTokene({ old_tokene_id, new_tokenes }) {
@@ -532,7 +541,37 @@ const WorldCanvas = {
     // Render
     this.worldRenderer.render();
 
+    // FPS readout: roll over every ~500ms so the number is readable.
+    this._fpsFrames++;
+    const fpsDt = now - this._fpsLast;
+    if (fpsDt >= 500) {
+      const fps = Math.round((this._fpsFrames * 1000) / fpsDt);
+      if (this._fpsEl) {
+        this._fpsEl.textContent = `${fps} fps · ${this.tokeneData.size} tok`;
+      }
+      this._fpsFrames = 0;
+      this._fpsLast = now;
+    }
+
     this._rafId = requestAnimationFrame(() => this.animate());
+  },
+
+  /**
+   * Evict oldest tokenes when the count exceeds maxTokenes. Insertion order
+   * is preserved by Map so we just take the first N keys.
+   */
+  _enforceTokeneCap() {
+    const overflow = this.tokeneData.size - this.maxTokenes;
+    if (overflow <= 0) return;
+    let dropped = 0;
+    for (const id of this.tokeneData.keys()) {
+      if (dropped >= overflow) break;
+      this.physics.remove(id);
+      this.worldRenderer.removeTokene(id);
+      this.tokeneData.delete(id);
+      this.pushEvent("tokene_offscreen", { tokene_id: id });
+      dropped++;
+    }
   },
 
   applyConveyorForces() {

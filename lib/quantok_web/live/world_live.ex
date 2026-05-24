@@ -119,6 +119,7 @@ defmodule QuantokWeb.WorldLive do
           {world}
         </button>
         <span class="q-spacer"></span>
+        <span id="q-fps" class="q-fps" phx-update="ignore" title="frames per second">— fps</span>
         <span class="q-status">
           {@tokene_count} tok · {@node_count} nodes · {if @paused, do: "paused", else: @world_name}
         </span>
