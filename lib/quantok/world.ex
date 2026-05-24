@@ -78,6 +78,14 @@ defmodule Quantok.World do
   def remove_tokene(server, tokene_id),
     do: GenServer.call(server, {:remove_tokene, tokene_id})
 
+  @doc """
+  Register fragments produced by a shatter. The fragments only exist on the
+  client until this is called — without it they'd never be considered for
+  another round of shatter or absorption.
+  """
+  def register_fragments(server, source_id, fragments),
+    do: GenServer.cast(server, {:register_fragments, source_id, fragments})
+
   def update_node_position(server, node_id, position),
     do: GenServer.call(server, {:update_node_position, node_id, position})
 
@@ -309,6 +317,12 @@ defmodule Quantok.World do
     {:noreply, {world, [event | events]}}
   end
 
+  def handle_cast({:register_fragments, source_id, fragments}, {world, events}) do
+    event = {:emitted, source_id, fragments, now()}
+    world = Event.apply(world, event)
+    {:noreply, {world, [event | events]}}
+  end
+
   def handle_cast(:tick, {%{paused: true} = world, events}) do
     {:noreply, {world, events}}
   end
@@ -360,7 +374,7 @@ defmodule Quantok.World do
 
   # Shared trigger logic: handles emit and non-emit collectors
   defp do_trigger(world, events, collector_id, collector) do
-    case Collector.trigger(collector) do
+    case Collector.trigger(collector, Map.get(world.environment, :decay, %{})) do
       {:ok, output, cleared, emitted_tokenes} ->
         # Emit mode — trigger + emit new tokenes from collector
         event = {:triggered, collector_id, output, cleared, now()}

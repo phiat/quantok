@@ -35,19 +35,31 @@ defmodule QuantokWeb.WorldConfig do
           ×
         </button>
       </div>
-      <.body :if={@active} node={@active} />
+      <.body :if={@active} node={@active} is_template={@is_template} />
       <div :if={!@active} class="q-config-empty">click a node, or pick a type from the menu</div>
     </div>
     """
   end
 
   attr :node, :any, required: true
+  attr :is_template, :boolean, default: false
 
   defp body(%{node: %{type: :emitter, config: config}} = assigns) do
     assigns = assign(assigns, :config, config)
 
     ~H"""
     <div class="q-config-body">
+      <div :if={!@is_template} class="q-cfg-actions">
+        <button
+          phx-click="fire_emitter"
+          phx-value-node_id={@node.id}
+          class="q-cfg-btn q-cfg-btn--action"
+          title="emit one batch from this emitter"
+        >
+          fire
+        </button>
+      </div>
+
       <label class="q-cfg-label">command</label>
       <form phx-change="update_node_config" phx-submit="update_node_config">
         <input type="hidden" name="field" value="command" />
@@ -88,6 +100,17 @@ defmodule QuantokWeb.WorldConfig do
 
     ~H"""
     <div class="q-config-body">
+      <div :if={!@is_template} class="q-cfg-actions">
+        <button
+          phx-click="trigger_collector"
+          phx-value-node_id={@node.id}
+          class="q-cfg-btn q-cfg-btn--action"
+          title="run action on current buffer and release"
+        >
+          flush
+        </button>
+      </div>
+
       <label class="q-cfg-label">capacity</label>
       <div class="q-cfg-btns">
         <button
@@ -264,6 +287,8 @@ defmodule QuantokWeb.WorldConfig do
   defp body(assigns), do: ~H""
 
   defp module_label(nil), do: ""
+  # BPE is exposed as "token" in the UI; canonical encoding name is :token.
+  defp module_label(Quantok.Chunker.BPE), do: "token"
 
   defp module_label(mod) when is_atom(mod) do
     mod |> to_string() |> String.split(".") |> List.last() |> String.downcase()

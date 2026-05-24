@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "name": "Sha256 Decay",
+  "environment": {
+    "gravity": {"x": 0.0, "y": 9.81},
+    "tick_rate": 30,
+    "decay": {"enabled": true, "rate": 10.0, "shatter": "split"}
+  },
+  "nodes": [
+    {
+      "type": "emitter",
+      "label": "pangram",
+      "position": {"x": 0.0, "y": -340.0},
+      "config": {
+        "source": "Quantok.Node.Emitter.Manual",
+        "command": "The quick brown fox jumps over the lazy dog",
+        "chunker": "Quantok.Chunker.Word",
+        "emit_rate": 140,
+        "auto_repeat": true,
+        "repeat_interval": 4000
+      }
+    },
+    {
+      "type": "passive",
+      "label": "funnel L",
+      "position": {"x": -200.0, "y": -120.0},
+      "config": {
+        "shape": "ramp",
+        "width": 260.0,
+        "height": 10.0,
+        "angle": 0.45,
+        "friction": 0.3,
+        "restitution": 0.2,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "funnel R",
+      "position": {"x": 200.0, "y": -120.0},
+      "config": {
+        "shape": "ramp",
+        "width": 260.0,
+        "height": 10.0,
+        "angle": -0.45,
+        "friction": 0.3,
+        "restitution": 0.2,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "collector",
+      "label": "sha256 · emit",
+      "position": {"x": 0.0, "y": 80.0},
+      "config": {
+        "capacity": 6,
+        "trigger_mode": "on_full",
+        "tick_interval": 120,
+        "action": "Quantok.Node.Collector.Hash",
+        "command": "sha256",
+        "emit": true,
+        "output_chunker": "Quantok.Chunker.Word",
+        "emit_rate": 250
+      }
+    },
+    {
+      "type": "passive",
+      "label": "left wall",
+      "position": {"x": -560.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 600.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "right wall",
+      "position": {"x": 560.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 600.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "Floor",
+      "position": {"x": 0.0, "y": 380.0},
+      "config": {
+        "shape": "floor",
+        "width": 1200.0,
+        "height": 10.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    }
+  ]
+}

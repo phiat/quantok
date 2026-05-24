@@ -413,6 +413,14 @@ defmodule QuantokWeb.WorldLive do
       tokene ->
         {:ok, behavior, fragments} = Tokene.shatter(tokene)
         World.remove_tokene(socket.assigns.world_pid, tid)
+
+        # Without registering, fragments only exist on the client — the server
+        # wouldn't find them on a future shatter call, so they'd stay stuck
+        # pulsing at near-death forever.
+        if behavior in [:split, :explode] and fragments != [] do
+          World.register_fragments(socket.assigns.world_pid, tokene.source_id, fragments)
+        end
+
         {:noreply, apply_shatter(socket, tid, behavior, fragments)}
     end
   end

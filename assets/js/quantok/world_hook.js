@@ -7,6 +7,20 @@ import { initRapier, PhysicsWorld } from "./physics";
 import { WorldRenderer } from "./renderer";
 import { OFFSCREEN_THRESHOLD } from "./utils";
 
+// Per-encoding base half-lives in ms — mirrors Quantok.Tokene.@base_half_life
+// on the server. Used so decay affects every tokene when toggled at runtime,
+// regardless of whether it was spawned with decay enabled. Bit is :infinite.
+const BASE_HALF_LIFE = {
+  sentence: 8_000,
+  phrase: 15_000,
+  word: 30_000,
+  token: 45_000,
+  ngram: 50_000,
+  rune: 60_000,
+  byte: 120_000,
+  bit: 0, // never decays
+};
+
 const WorldCanvas = {
   async mounted() {
     this.tokeneData = new Map();
@@ -174,7 +188,11 @@ const WorldCanvas = {
       const nx = world.x - this._drag.offsetX;
       const ny = world.y - this._drag.offsetY;
       this.worldRenderer.moveNode(this._drag.nodeId, nx, ny);
-      this.physics.moveKinematic(this._drag.nodeId, nx, -ny);
+      // Use moveBody so passives (static) move too, not just kinematic nodes
+      this.physics.moveBody(this._drag.nodeId, nx, -ny);
+      // Keep the conveyor surface-velocity raycast in sync with the new pos
+      const conv = this.conveyors.get(this._drag.nodeId);
+      if (conv) { conv.x = nx; conv.y = -ny; }
       return;
     }
     // Hover detection
@@ -472,21 +490,22 @@ const WorldCanvas = {
       this.pushEvent("tokene_offscreen", { tokene_id: id });
     }
 
-    // Visual decay: compute integrity per-frame for decaying tokenes.
-    // Honors the runtime decayEnabled flag so toggling decay also pulls
-    // already-existing tokenes into the decay regime, not just new ones.
+    // Visual decay: compute integrity per-frame for every tokene.
+    // The runtime decayEnabled flag drives all tokenes uniformly — half-life
+    // comes from the per-encoding base table, so tokenes spawned with decay
+    // disabled still fade once the toggle flips on. Anchor at toggle time so
+    // older tokenes don't snap straight to shatter.
     const now = performance.now();
     if (this.decayEnabled) {
-      // Anchor decay to the toggle moment for tokenes spawned before decay was on,
-      // so they don't snap straight to "shattered" the moment you flip the toggle.
       if (this._decayAnchor == null) this._decayAnchor = now;
       const rate = this.decayRate || 1;
       for (const [id, t] of this.tokeneData) {
-        if (!t.decay || !t.decay.half_life) continue;
+        const halfLife = BASE_HALF_LIFE[t.encoding];
+        if (!halfLife) continue; // bit / unknown encoding — inert
         const startedAt = Math.max(t._spawnedAt || now, this._decayAnchor);
         const elapsed = (now - startedAt) * rate;
         const initialIntegrity = t.integrity || 0.5;
-        const ratio = initialIntegrity * Math.pow(0.5, elapsed / t.decay.half_life);
+        const ratio = initialIntegrity * Math.pow(0.5, elapsed / halfLife);
         this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
         if (ratio < 0.05 * initialIntegrity && !this._pendingShatter.has(id)) {
           this._pendingShatter.add(id);

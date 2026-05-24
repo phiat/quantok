@@ -149,6 +149,21 @@ export class PhysicsWorld {
     }
   }
 
+  /**
+   * Move a body of any type. Static bodies (passives) need setTranslation,
+   * kinematic ones use the next-translation API. Without this, dragging a
+   * passive moves the visual but the physics body stays put.
+   */
+  moveBody(id, x, y) {
+    const body = this.bodies.get(id);
+    if (!body) return;
+    if (body.isKinematic && body.isKinematic()) {
+      body.setNextKinematicTranslation({ x, y });
+    } else {
+      body.setTranslation({ x, y }, true);
+    }
+  }
+
   /** Apply a force to a dynamic body (for attractors/repellers) */
   applyForce(id, fx, fy) {
     const body = this.bodies.get(id);

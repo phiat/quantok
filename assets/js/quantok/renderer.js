@@ -188,14 +188,14 @@ export class WorldRenderer {
       default:            color = 0x294c60;
     }
 
-    // Main body
+    // Main body — transformers are translucent so tokenes show through
     const bodyGeo = new THREE.PlaneGeometry(width, height);
     const bodyMat = new THREE.MeshStandardMaterial({
       color,
       roughness: 0.6,
       metalness: 0.2,
       transparent: true,
-      opacity: 0.85,
+      opacity: nodeType === "transformer" ? 0.45 : 0.85,
     });
     const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
     bodyMesh.userData = { isBody: true };
@@ -422,10 +422,11 @@ export class WorldRenderer {
     if (!bgMesh.material.transparent) bgMesh.material.transparent = true;
     bgMesh.material.opacity = 0.3 + integrityRatio * 0.7;
 
-    // Pulse when near death (integrity < 15%)
-    if (integrityRatio < 0.15 && integrityRatio > 0) {
-      const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.01);
-      bgMesh.material.opacity *= 0.4 + pulse * 0.6;
+    // Pulse only in the last sliver before shatter (shatter trigger = 5%).
+    // Keep the window tight so it reads as "about to die" not "still alive".
+    if (integrityRatio < 0.08 && integrityRatio > 0) {
+      const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.02);
+      bgMesh.material.opacity *= 0.35 + pulse * 0.6;
     }
   }
 

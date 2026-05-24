@@ -339,6 +339,21 @@ body { margin: 0; overflow: hidden; }
 }
 .q-cfg-btn:hover { border-color: var(--q-peach); color: var(--q-peach); }
 .q-cfg-btn--active { border-color: var(--q-papaya); background: rgba(255,196,155,0.15); }
+.q-cfg-btn--action {
+  border-color: var(--q-papaya);
+  background: rgba(255,196,155,0.18);
+  padding: 0.125rem 0.625rem;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.q-cfg-btn--action:hover { background: rgba(255,196,155,0.35); }
+
+.q-cfg-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
 
 .q-cfg-input {
   width: 100%;

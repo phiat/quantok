@@ -80,10 +80,12 @@ defmodule Quantok.Node.Collector do
   Returns `{:ok, output, cleared_node}` when emit is false,
   or `{:ok, output, cleared_node, tokenes}` when emit is true.
   """
-  @spec trigger(Node.t()) ::
+  @spec trigger(Node.t(), map()) ::
           {:ok, binary(), Node.t()}
           | {:ok, binary(), Node.t(), [Tokene.t()]}
-  def trigger(%Node{type: :collector, config: config} = node) do
+  def trigger(node, world_decay \\ %{})
+
+  def trigger(%Node{type: :collector, config: config} = node, world_decay) do
     text = buffer_text(node)
     output = config.action.process(config.command, text)
     cleared = %{node | config: %{config | buffer: [], ticks_since_trigger: 0}}
@@ -91,7 +93,10 @@ defmodule Quantok.Node.Collector do
     if config.emit and config.output_chunker != nil do
       chunks = config.output_chunker.chunk(output)
       encoding = config.output_chunker.encoding()
-      tokenes = Enum.map(chunks, &Tokene.new(&1, encoding, source_id: node.id))
+
+      tokenes =
+        Enum.map(chunks, &Tokene.new(&1, encoding, source_id: node.id, decay: world_decay))
+
       {:ok, output, cleared, tokenes}
     else
       {:ok, output, cleared}

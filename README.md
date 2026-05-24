@@ -7,6 +7,13 @@ A physics sandbox where data chunks are physical objects.
 
 Emitters produce **tokenes** from commands and data. Tokenes fall through a 2D world affected by gravity, collide with surfaces, pass through transformers, and land in collectors that trigger actions. The chunking granularity — bits, bytes, runes, BPE tokens, words, phrases, sentences — determines a tokene's mass, size, and physical behavior.
 
+| | |
+|:-:|:-:|
+| ![default sandbox firing](docs/screenshots/01-default-firing.png) | ![toolchain · mise list](docs/screenshots/02-toolchain-8s.png) |
+| *default sandbox — clock dropping word-tokenes* | *toolchain preset — shell `mise list` cascading* |
+| ![refinery preset](docs/screenshots/03-refinery-20s.png) | ![sha256 + 10× decay](docs/screenshots/04-sha256-decay-6s.png) |
+| *refinery preset after 20s — multi-source pipeline* | *sha256 preset with decay 10× — tokenes fade and split* |
+
 ## Quick Start
 
 ```bash
