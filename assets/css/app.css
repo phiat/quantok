@@ -217,10 +217,58 @@ body { margin: 0; overflow: hidden; }
 }
 .q-btn:hover { background: #3a6278; }
 
-.q-btn--emit { border-left: 2px solid #44cc88; }
-.q-btn--collect { border-left: 2px solid var(--q-peach); }
-.q-btn--transform { border-left: 2px solid #cc66cc; }
-.q-btn--passive { border-left: 2px solid var(--q-slate); }
+/* Menu item: split-button row. Body click opens template config; + adds with defaults. */
+.q-mi {
+  display: flex;
+  align-items: stretch;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.q-mi-body,
+.q-mi-add {
+  border: none;
+  font-family: inherit;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  background: var(--q-charcoal);
+  color: var(--q-papaya);
+  transition: background 120ms, color 120ms;
+  padding: 0.25rem 0.5rem;
+}
+.q-mi-body {
+  flex: 1;
+  text-align: left;
+  border-right: 1px solid rgba(0, 0, 0, 0.25);
+}
+.q-mi-add {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  color: var(--q-slate);
+  font-weight: 600;
+}
+.q-mi-body:hover { background: #3a6278; }
+.q-mi-add:hover { background: #3a6278; color: var(--q-papaya); }
+
+.q-btn--emit,
+.q-mi--emit { border-left: 2px solid #44cc88; }
+.q-btn--collect,
+.q-mi--collect { border-left: 2px solid var(--q-peach); }
+.q-btn--transform,
+.q-mi--transform { border-left: 2px solid #cc66cc; }
+.q-btn--passive,
+.q-mi--passive { border-left: 2px solid var(--q-slate); }
+
+.q-config-add {
+  background: none;
+  border: none;
+  color: var(--q-slate);
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  margin-right: 0.25rem;
+}
+.q-config-add:hover { color: #44cc88; }
 /* Node config panel */
 .q-config {
   flex: 0 0 10rem;

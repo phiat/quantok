@@ -53,6 +53,7 @@ defmodule QuantokWeb.WorldLive do
       |> assign(:decay_rate, 1.0)
       |> assign(:decay_shatter, :split)
       |> assign(:selected_node, nil)
+      |> assign(:template_node, nil)
       |> assign(:next_x, 0)
       |> push_node(floor)
       |> push_node(emitter)
@@ -65,6 +66,29 @@ defmodule QuantokWeb.WorldLive do
     socket = assign(socket, :tick_rate, tick_rate)
 
     {:ok, socket}
+  end
+
+  attr :kind, :string, required: true
+  attr :label, :string, required: true
+  attr :variant, :string, required: true
+  attr :params, :map, required: true
+  attr :add_event, :string, required: true
+
+  defp menu_item(assigns) do
+    body_attrs =
+      assigns.params
+      |> Map.new(fn {k, v} -> {"phx-value-" <> k, v} end)
+      |> Map.put("phx-value-kind", assigns.kind)
+
+    add_attrs = Map.new(assigns.params, fn {k, v} -> {"phx-value-" <> k, v} end)
+    assigns = assign(assigns, body_attrs: body_attrs, add_attrs: add_attrs)
+
+    ~H"""
+    <div class={"q-mi q-mi--" <> @variant}>
+      <button class="q-mi-body" phx-click="open_template" {@body_attrs}>{@label}</button>
+      <button class="q-mi-add" phx-click={@add_event} {@add_attrs}>+</button>
+    </div>
+    """
   end
 
   @impl true
@@ -123,179 +147,207 @@ defmodule QuantokWeb.WorldLive do
       <div class="flex flex-1 overflow-hidden">
         <nav class="q-sidebar">
           <div class="q-section">Emitters</div>
-          <button
-            phx-click="add_emitter"
-            phx-value-command="date"
-            phx-value-chunker="word"
-            class="q-btn q-btn--emit"
-          >
-            date · word
-          </button>
-          <button
-            phx-click="add_emitter"
-            phx-value-command="date"
-            phx-value-chunker="byte"
-            class="q-btn q-btn--emit"
-          >
-            date · byte
-          </button>
-          <button
-            phx-click="add_emitter"
-            phx-value-command="echo hello world"
-            phx-value-chunker="token"
-            class="q-btn q-btn--emit"
-          >
-            echo · token
-          </button>
-          <button
-            phx-click="add_emitter"
-            phx-value-command="uname -a"
-            phx-value-chunker="word"
-            class="q-btn q-btn--emit"
-          >
-            uname · word
-          </button>
-          <button
-            phx-click="add_source_emitter"
-            phx-value-source="clock"
-            phx-value-chunker="rune"
-            class="q-btn q-btn--emit"
-          >
-            clock · rune
-          </button>
-          <button
-            phx-click="add_source_emitter"
-            phx-value-source="sequence"
-            phx-value-command="alpha"
-            phx-value-chunker="word"
-            class="q-btn q-btn--emit"
-          >
-            A–Z · word
-          </button>
-          <button
-            phx-click="add_source_emitter"
-            phx-value-source="manual"
-            phx-value-command="The quick brown fox jumps over the lazy dog"
-            phx-value-chunker="word"
-            class="q-btn q-btn--emit"
-          >
-            pangram · word
-          </button>
+          <.menu_item
+            kind="emitter"
+            label="date · word"
+            variant="emit"
+            params={%{"command" => "date", "chunker" => "word"}}
+            add_event="add_emitter"
+          />
+          <.menu_item
+            kind="emitter"
+            label="date · byte"
+            variant="emit"
+            params={%{"command" => "date", "chunker" => "byte"}}
+            add_event="add_emitter"
+          />
+          <.menu_item
+            kind="emitter"
+            label="echo · token"
+            variant="emit"
+            params={%{"command" => "echo hello world", "chunker" => "token"}}
+            add_event="add_emitter"
+          />
+          <.menu_item
+            kind="emitter"
+            label="uname · word"
+            variant="emit"
+            params={%{"command" => "uname -a", "chunker" => "word"}}
+            add_event="add_emitter"
+          />
+          <.menu_item
+            kind="source_emitter"
+            label="clock · rune"
+            variant="emit"
+            params={%{"source" => "clock", "chunker" => "rune"}}
+            add_event="add_source_emitter"
+          />
+          <.menu_item
+            kind="source_emitter"
+            label="A–Z · word"
+            variant="emit"
+            params={%{"source" => "sequence", "command" => "alpha", "chunker" => "word"}}
+            add_event="add_source_emitter"
+          />
+          <.menu_item
+            kind="source_emitter"
+            label="pangram · word"
+            variant="emit"
+            params={
+              %{
+                "source" => "manual",
+                "command" => "The quick brown fox jumps over the lazy dog",
+                "chunker" => "word"
+              }
+            }
+            add_event="add_source_emitter"
+          />
 
           <div class="q-section">Collectors</div>
-          <button phx-click="add_collector" phx-value-capacity="8" class="q-btn q-btn--collect">
-            collect · 8
-          </button>
-          <button phx-click="add_collector" phx-value-capacity="16" class="q-btn q-btn--collect">
-            collect · 16
-          </button>
-          <button
-            phx-click="add_typed_collector"
-            phx-value-action="reverse"
-            phx-value-capacity="8"
-            class="q-btn q-btn--collect"
-          >
-            reverse · 8
-          </button>
-          <button
-            phx-click="add_typed_collector"
-            phx-value-action="upcase"
-            phx-value-capacity="8"
-            class="q-btn q-btn--collect"
-          >
-            upcase · 8
-          </button>
-          <button
-            phx-click="add_typed_collector"
-            phx-value-action="count"
-            phx-value-capacity="8"
-            class="q-btn q-btn--collect"
-          >
-            count · 8
-          </button>
-          <button
-            phx-click="add_timed_collector"
-            phx-value-capacity="8"
-            phx-value-interval="120"
-            class="q-btn q-btn--collect"
-          >
-            timed · 4s
-          </button>
-          <button
-            phx-click="add_emit_collector"
-            phx-value-action="reverse"
-            phx-value-capacity="4"
-            phx-value-chunker="word"
-            class="q-btn q-btn--collect"
-          >
-            reverse · emit
-          </button>
-          <button
-            phx-click="add_emit_collector"
-            phx-value-action="upcase"
-            phx-value-capacity="4"
-            phx-value-chunker="word"
-            class="q-btn q-btn--collect"
-          >
-            upcase · emit
-          </button>
-          <button
-            phx-click="add_emit_collector"
-            phx-value-action="echo"
-            phx-value-capacity="4"
-            phx-value-chunker="byte"
-            class="q-btn q-btn--collect"
-          >
-            echo · emit
-          </button>
+          <.menu_item
+            kind="collector"
+            label="collect · 8"
+            variant="collect"
+            params={%{"capacity" => "8"}}
+            add_event="add_collector"
+          />
+          <.menu_item
+            kind="collector"
+            label="collect · 16"
+            variant="collect"
+            params={%{"capacity" => "16"}}
+            add_event="add_collector"
+          />
+          <.menu_item
+            kind="typed_collector"
+            label="reverse · 8"
+            variant="collect"
+            params={%{"action" => "reverse", "capacity" => "8"}}
+            add_event="add_typed_collector"
+          />
+          <.menu_item
+            kind="typed_collector"
+            label="upcase · 8"
+            variant="collect"
+            params={%{"action" => "upcase", "capacity" => "8"}}
+            add_event="add_typed_collector"
+          />
+          <.menu_item
+            kind="typed_collector"
+            label="count · 8"
+            variant="collect"
+            params={%{"action" => "count", "capacity" => "8"}}
+            add_event="add_typed_collector"
+          />
+          <.menu_item
+            kind="timed_collector"
+            label="timed · 4s"
+            variant="collect"
+            params={%{"capacity" => "8", "interval" => "120"}}
+            add_event="add_timed_collector"
+          />
+          <.menu_item
+            kind="emit_collector"
+            label="reverse · emit"
+            variant="collect"
+            params={%{"action" => "reverse", "capacity" => "4", "chunker" => "word"}}
+            add_event="add_emit_collector"
+          />
+          <.menu_item
+            kind="emit_collector"
+            label="upcase · emit"
+            variant="collect"
+            params={%{"action" => "upcase", "capacity" => "4", "chunker" => "word"}}
+            add_event="add_emit_collector"
+          />
+          <.menu_item
+            kind="emit_collector"
+            label="echo · emit"
+            variant="collect"
+            params={%{"action" => "echo", "capacity" => "4", "chunker" => "byte"}}
+            add_event="add_emit_collector"
+          />
 
           <div class="q-section">Transformers</div>
-          <button
-            phx-click="add_transformer"
-            phx-value-effect="splitter"
-            class="q-btn q-btn--transform"
-          >
-            splitter
-          </button>
-          <button phx-click="add_transformer" phx-value-effect="heater" class="q-btn q-btn--transform">
-            heater
-          </button>
-          <button phx-click="add_transformer" phx-value-effect="cooler" class="q-btn q-btn--transform">
-            cooler
-          </button>
-          <button
-            phx-click="add_transformer"
-            phx-value-effect="duplicator"
-            class="q-btn q-btn--transform"
-          >
-            duplicator
-          </button>
-          <button
-            phx-click="add_transformer"
-            phx-value-effect="crusher"
-            class="q-btn q-btn--transform"
-          >
-            crusher
-          </button>
+          <.menu_item
+            kind="transformer"
+            label="splitter"
+            variant="transform"
+            params={%{"effect" => "splitter"}}
+            add_event="add_transformer"
+          />
+          <.menu_item
+            kind="transformer"
+            label="heater"
+            variant="transform"
+            params={%{"effect" => "heater"}}
+            add_event="add_transformer"
+          />
+          <.menu_item
+            kind="transformer"
+            label="cooler"
+            variant="transform"
+            params={%{"effect" => "cooler"}}
+            add_event="add_transformer"
+          />
+          <.menu_item
+            kind="transformer"
+            label="duplicator"
+            variant="transform"
+            params={%{"effect" => "duplicator"}}
+            add_event="add_transformer"
+          />
+          <.menu_item
+            kind="transformer"
+            label="crusher"
+            variant="transform"
+            params={%{"effect" => "crusher"}}
+            add_event="add_transformer"
+          />
 
           <div class="q-section">World</div>
-          <button phx-click="add_passive" phx-value-shape="ramp" class="q-btn q-btn--passive">
-            ramp
-          </button>
-          <button phx-click="add_passive" phx-value-shape="wall" class="q-btn q-btn--passive">
-            wall
-          </button>
-          <button phx-click="add_passive" phx-value-shape="funnel" class="q-btn q-btn--passive">
-            funnel
-          </button>
+          <.menu_item
+            kind="passive"
+            label="ramp"
+            variant="passive"
+            params={%{"shape" => "ramp"}}
+            add_event="add_passive"
+          />
+          <.menu_item
+            kind="passive"
+            label="wall"
+            variant="passive"
+            params={%{"shape" => "wall"}}
+            add_event="add_passive"
+          />
+          <.menu_item
+            kind="passive"
+            label="funnel"
+            variant="passive"
+            params={%{"shape" => "funnel"}}
+            add_event="add_passive"
+          />
         </nav>
 
-        <div :if={@selected_node} class="q-config">
+        <div :if={@selected_node || @template_node} class="q-config">
           <div class="q-config-header">
-            <span class="q-config-title">{@selected_node.label}</span>
-            <button phx-click="deselect_node" class="q-config-close">×</button>
+            <button
+              :if={@template_node}
+              phx-click="add_template"
+              class="q-config-add"
+              title="add to world"
+            >
+              +
+            </button>
+            <span class="q-config-title">{(@template_node || @selected_node).label}</span>
+            <button
+              phx-click={if @template_node, do: "close_template", else: "deselect_node"}
+              class="q-config-close"
+            >
+              ×
+            </button>
           </div>
-          {render_node_config(assigns)}
+          {render_node_config(assign(assigns, :selected_node, @template_node || @selected_node))}
         </div>
 
         <div class="q-canvas-wrap">
@@ -594,8 +646,11 @@ defmodule QuantokWeb.WorldLive do
     world = World.get_state(socket.assigns.world_pid)
 
     case Map.get(world.nodes, id) do
-      nil -> {:noreply, assign(socket, :selected_node, nil)}
-      node -> {:noreply, assign(socket, :selected_node, node)}
+      nil ->
+        {:noreply, socket |> assign(:selected_node, nil) |> assign(:template_node, nil)}
+
+      node ->
+        {:noreply, socket |> assign(:selected_node, node) |> assign(:template_node, nil)}
     end
   end
 
@@ -603,18 +658,57 @@ defmodule QuantokWeb.WorldLive do
     {:noreply, assign(socket, :selected_node, nil)}
   end
 
-  def handle_event("update_node_config", params, socket) do
-    case socket.assigns.selected_node do
+  def handle_event("open_template", %{"kind" => kind} = params, socket) do
+    case build_template(kind, params) do
       nil ->
         {:noreply, socket}
 
-      node ->
+      template ->
+        {:noreply, socket |> assign(:template_node, template) |> assign(:selected_node, nil)}
+    end
+  end
+
+  def handle_event("close_template", _params, socket) do
+    {:noreply, assign(socket, :template_node, nil)}
+  end
+
+  def handle_event("add_template", _params, socket) do
+    case socket.assigns.template_node do
+      nil ->
+        {:noreply, socket}
+
+      template ->
+        {x, socket} = next_x(socket)
+        {_px, py} = template.position
+        node = %{template | position: {x, py}}
+        {:ok, _} = World.add_node(socket.assigns.world_pid, node)
+
+        {:noreply,
+         socket
+         |> push_node(node)
+         |> update(:node_count, &(&1 + 1))
+         |> assign(:template_node, nil)}
+    end
+  end
+
+  def handle_event("update_node_config", params, socket) do
+    cond do
+      socket.assigns.template_node ->
+        node = socket.assigns.template_node
+        updated_config = apply_config_changes(node, params)
+        {:noreply, assign(socket, :template_node, %{node | config: updated_config})}
+
+      socket.assigns.selected_node ->
+        node = socket.assigns.selected_node
         updated_config = apply_config_changes(node, params)
 
         {:ok, updated} =
           World.update_node(socket.assigns.world_pid, node.id, %{config: updated_config})
 
         {:noreply, assign(socket, :selected_node, updated)}
+
+      true ->
+        {:noreply, socket}
     end
   end
 
@@ -1153,6 +1247,91 @@ defmodule QuantokWeb.WorldLive do
 
   defp serialize_value(v) when is_atom(v), do: to_string(v)
   defp serialize_value(v), do: v
+
+  defp build_template("emitter", %{"command" => cmd, "chunker" => ch}) do
+    if cmd in @allowed_shell_commands do
+      Emitter.new(
+        command: cmd,
+        chunker: chunker_module(ch),
+        position: {0.0, -300.0},
+        label: cmd
+      )
+    end
+  end
+
+  defp build_template("source_emitter", params) do
+    case source_module(params["source"]) do
+      nil ->
+        nil
+
+      source_mod ->
+        Emitter.new(
+          source: source_mod,
+          command: params["command"] || "",
+          chunker: chunker_module(params["chunker"] || "word"),
+          position: {0.0, -300.0},
+          label: params["source"]
+        )
+    end
+  end
+
+  defp build_template("collector", %{"capacity" => cap}) do
+    Collector.new(
+      capacity: parse_int(cap, 8),
+      position: {0.0, 250.0},
+      label: "Collector"
+    )
+  end
+
+  defp build_template("typed_collector", %{"action" => action, "capacity" => cap}) do
+    Collector.new(
+      capacity: parse_int(cap, 8),
+      action: collector_action(action),
+      emit: true,
+      output_chunker: Quantok.Chunker.Byte,
+      position: {0.0, 250.0},
+      label: String.capitalize(action)
+    )
+  end
+
+  defp build_template("timed_collector", %{"capacity" => cap, "interval" => int}) do
+    Collector.new(
+      capacity: parse_int(cap, 8),
+      trigger_mode: :timed,
+      tick_interval: parse_int(int, 120),
+      emit: true,
+      output_chunker: Quantok.Chunker.Byte,
+      position: {0.0, 250.0},
+      label: "Timed"
+    )
+  end
+
+  defp build_template("emit_collector", %{"action" => action, "capacity" => cap, "chunker" => ch}) do
+    Collector.new(
+      capacity: parse_int(cap, 4),
+      action: collector_action(action),
+      emit: true,
+      output_chunker: chunker_module(ch),
+      position: {0.0, 250.0},
+      label: String.capitalize(action) <> " emit"
+    )
+  end
+
+  defp build_template("transformer", %{"effect" => effect}) do
+    case effect_atom(effect) do
+      nil -> nil
+      atom -> Transformer.new(atom, position: {0.0, 0.0}, radius: 60.0)
+    end
+  end
+
+  defp build_template("passive", %{"shape" => shape}) do
+    case shape_atom(shape) do
+      nil -> nil
+      atom -> Passive.new(atom, position: {0.0, 100.0})
+    end
+  end
+
+  defp build_template(_, _), do: nil
 
   defp effect_atom("splitter"), do: :splitter
   defp effect_atom("crusher"), do: :crusher
