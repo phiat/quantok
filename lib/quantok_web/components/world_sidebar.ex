@@ -64,6 +64,12 @@ defmodule QuantokWeb.WorldSidebar do
         event="add_source_emitter"
         params={%{"source" => "random", "command" => "hex:32", "chunker" => "byte"}}
       />
+      <.item
+        label="shell · word"
+        variant="emit"
+        event="add_source_emitter"
+        params={%{"source" => "shell", "command" => "echo hello", "chunker" => "word"}}
+      />
 
       <div class="q-section">Collectors</div>
       <.item

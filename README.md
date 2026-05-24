@@ -14,14 +14,16 @@ just setup   # install deps, create db, download BPE rank files
 just run     # start Phoenix server with IEx
 ```
 
-Open [localhost:4000](http://localhost:4000). You'll see an emitter, a floor, and a collector. Click **fire all** to watch `date` output fall as word-tokenes.
+Open [localhost:4000](http://localhost:4000). You'll see an emitter, a floor, and a collector. Click **fire all** to watch the clock output fall as word-tokenes.
+
+> **Heads up:** the **shell** emitter runs arbitrary commands through `sh -c` on the host. Quantok is a single-user local sandbox — don't expose it to the open internet.
 
 ## How It Works
 
 ```
-Emitter (runs "date")
+Emitter (clock, %H:%M:%S)
     |
-    | pipe drops tokenes: "Thu" "Mar" "6" "2026" ...
+    | pipe drops tokenes: "14:23:07" -> "14:23:08" -> ...
     v
   [gravity]
     |
@@ -29,7 +31,7 @@ Emitter (runs "date")
 Collector (8 slots) -> triggers action when full
 ```
 
-- **Emitters** execute a source (shell command, clock, sequence, manual text, random bytes) and chunk the output
+- **Emitters** execute a source (clock, sequence, manual text, random bytes, shell) and chunk the output
 - **Collectors** absorb tokenes into a buffer, trigger an action (echo, reverse, upcase, count, hash, shell). Trigger modes: on-full, manual, or timed (physics-tick interval). Output modes: discard or emit (re-chunk output as new tokenes)
 - **Transformers** modify tokenes by proximity — split, crush, heat, cool, filter, duplicate, paint
 - **Passives** are static geometry — floors, walls, ramps, funnels, conveyors (apply lateral surface velocity)

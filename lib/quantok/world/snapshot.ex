@@ -209,23 +209,13 @@ defmodule Quantok.World.Snapshot do
 
   # --- Deserialization ---
 
-  @allowed_shell_commands ["date", "uname -a", "echo hello world", "hostname", "whoami", "uptime"]
-
   defp deserialize_node(%{"type" => "emitter"} = data) do
     source = string_to_module(data["config"]["source"], :emitter_source)
     command = data["config"]["command"] || "echo hello"
 
-    # Shell source commands must be in the allowlist
-    safe_command =
-      if source == Quantok.Node.Emitter.Shell and command not in @allowed_shell_commands do
-        "echo hello"
-      else
-        command
-      end
-
     Emitter.new(
       source: source,
-      command: safe_command,
+      command: command,
       chunker: string_to_module(data["config"]["chunker"], :chunker),
       emit_rate: data["config"]["emit_rate"] || 100,
       position: deserialize_position(data["position"]),

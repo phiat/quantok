@@ -174,31 +174,8 @@ defmodule QuantokWeb.WorldLive do
     {:noreply, assign(socket, :decay_shatter, shatter_atom)}
   end
 
-  @allowed_shell_commands ["date", "uname -a", "echo hello world", "hostname", "whoami", "uptime"]
-
-  def handle_event("add_emitter", %{"command" => command, "chunker" => chunker}, socket) do
-    if command in @allowed_shell_commands do
-      chunker_mod = chunker_module(chunker)
-      {x, socket} = next_x(socket)
-
-      emitter =
-        Emitter.new(command: command, chunker: chunker_mod, position: {x, -300.0}, label: command)
-
-      {:ok, _} = World.add_node(socket.assigns.world_pid, emitter)
-
-      {:noreply,
-       socket
-       |> push_node(emitter)
-       |> update(:node_count, &(&1 + 1))
-       |> assign(:selected_node, emitter)}
-    else
-      {:noreply, socket}
-    end
-  end
-
   def handle_event("add_source_emitter", params, socket) do
-    # Drop unknown sources silently. The Shell source must go through
-    # add_emitter so the @allowed_shell_commands check applies.
+    # Drop unknown sources silently.
     case source_module(params["source"]) do
       nil ->
         {:noreply, socket}
@@ -693,12 +670,6 @@ defmodule QuantokWeb.WorldLive do
 
   # --- Template builders (preview before commit) ---
 
-  defp build_template("emitter", %{"command" => cmd, "chunker" => ch}) do
-    if cmd in @allowed_shell_commands do
-      Emitter.new(command: cmd, chunker: chunker_module(ch), position: {0.0, -300.0}, label: cmd)
-    end
-  end
-
   defp build_template("source_emitter", params) do
     case source_module(params["source"]) do
       nil ->
@@ -977,6 +948,7 @@ defmodule QuantokWeb.WorldLive do
   defp source_module("manual"), do: Quantok.Node.Emitter.Manual
   defp source_module("sequence"), do: Quantok.Node.Emitter.Sequence
   defp source_module("random"), do: Quantok.Node.Emitter.Random
+  defp source_module("shell"), do: Quantok.Node.Emitter.Shell
   defp source_module(_), do: nil
 
   defp collector_action("echo"), do: Quantok.Node.Collector.Echo
