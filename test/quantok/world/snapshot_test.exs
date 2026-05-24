@@ -105,6 +105,38 @@ defmodule Quantok.World.SnapshotTest do
     assert {:error, {:unsupported_version, 99}} = result
   end
 
+  test "emit collector without persisted output_chunker defaults to Word on load", %{pid: pid} do
+    # Regression: pre-emit snapshots (and any save where output_chunker
+    # is absent) would silently disable emit on load because the trigger
+    # path requires both emit=true AND output_chunker != nil.
+    snapshot = %{
+      "version" => 1,
+      "name" => "Legacy",
+      "environment" => %{"gravity" => %{"x" => 0.0, "y" => 150.0}},
+      "nodes" => [
+        %{
+          "type" => "collector",
+          "label" => "legacy emit",
+          "position" => %{"x" => 0.0, "y" => 0.0},
+          "config" => %{
+            "capacity" => 4,
+            "trigger_mode" => "manual",
+            "action" => "Quantok.Node.Collector.Echo",
+            "command" => "echo",
+            "emit" => true
+            # output_chunker intentionally omitted
+          }
+        }
+      ]
+    }
+
+    {:ok, 1} = Snapshot.load_into(pid, snapshot)
+    world = World.get_state(pid)
+    [collector] = Map.values(world.nodes)
+    assert collector.config.emit == true
+    assert collector.config.output_chunker == Quantok.Chunker.Word
+  end
+
   test "list_saves finds JSON files" do
     dir = Path.join(System.tmp_dir!(), "quantok_saves_test_#{:rand.uniform(100_000)}")
     File.mkdir_p!(dir)

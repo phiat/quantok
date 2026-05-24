@@ -238,7 +238,14 @@ defmodule Quantok.World.Snapshot do
     config = data["config"]
     action = string_to_module(config["action"], :collector_action)
     command = safe_collector_command(action, config["command"])
+    emit = config["emit"] == true or config["output_mode"] in ["emit", "paired"]
     output_chunker = safe_optional_module(config["output_chunker"], :chunker)
+
+    # Pre-emit snapshots and any legacy worlds without an output_chunker
+    # key would silently disable emit on load; default to Word when emit
+    # is on but no chunker was persisted.
+    output_chunker =
+      if emit and is_nil(output_chunker), do: Quantok.Chunker.Word, else: output_chunker
 
     Collector.new(
       capacity: config["capacity"] || 8,
@@ -246,7 +253,7 @@ defmodule Quantok.World.Snapshot do
       tick_interval: config["tick_interval"] || 120,
       action: action,
       command: command,
-      emit: config["emit"] == true or config["output_mode"] in ["emit", "paired"],
+      emit: emit,
       output_chunker: output_chunker,
       emit_rate: config["emit_rate"] || 250,
       position: deserialize_position(data["position"]),
