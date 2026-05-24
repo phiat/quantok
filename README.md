@@ -119,15 +119,17 @@ just fmt        # format all code
 
 ## Tech Stack
 
-| Layer     | Choice                              |
-|-----------|-------------------------------------|
-| Backend   | Elixir, Phoenix 1.8, LiveView       |
-| Rendering | Three.js, troika-three-text         |
-| Physics   | Rapier2D (WASM)                     |
-| PostFX    | Three.js EffectComposer, bloom      |
-| Database  | SQLite (dev) / Postgres (prod)      |
-| Quality   | Credo, ExUnit                       |
-| Tasks     | just                                |
+| Layer        | Choice                                                                       |
+|--------------|------------------------------------------------------------------------------|
+| Backend      | Elixir, Phoenix 1.8, LiveView 1.1, Bandit                                    |
+| Rendering    | Three.js, troika-three-text                                                  |
+| Physics      | Rapier2D (WASM)                                                              |
+| PostFX       | Three.js EffectComposer, bloom                                               |
+| Tokenization | [tiktokenex](https://github.com/phiat/tiktokenex) (cl100k_base, o200k_base)  |
+| Database     | SQLite (dev) / Postgres (prod)                                               |
+| Quality      | Credo, ExUnit                                                                |
+| CI           | GitHub Actions                                                               |
+| Tasks        | just                                                                         |
 
 ## License
 
