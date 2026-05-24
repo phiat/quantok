@@ -34,6 +34,8 @@ Collector (8 slots) -> triggers action when full
 - **Transformers** modify tokenes by proximity — split, crush, heat, cool, filter, duplicate, paint
 - **Passives** are static geometry — floors, walls, ramps, funnels, conveyors (apply lateral surface velocity)
 
+**Sidebar** (left): each row is a split button — click the **body** to preview the node-type in the config panel (right) before adding, or click **+** to drop it into the world immediately with defaults. Either way, the new node briefly highlights so you can spot it. Click any existing node on the canvas to load its config; click **×** in the config header to dismiss.
+
 Nodes are draggable. Hover over a node for contextual actions (fire, trigger, clear, rotate, delete). Scroll to zoom, shift+drag to pan.
 
 ## Architecture

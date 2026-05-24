@@ -217,15 +217,20 @@ body { margin: 0; overflow: hidden; }
 }
 .q-btn:hover { background: #3a6278; }
 
-/* Menu item: split-button row. Body click opens template config; + adds with defaults. */
-.q-mi {
+.q-btn--emit { border-left: 2px solid #44cc88; }
+.q-btn--collect { border-left: 2px solid var(--q-peach); }
+.q-btn--transform { border-left: 2px solid #cc66cc; }
+.q-btn--passive { border-left: 2px solid var(--q-slate); }
+
+/* Sidebar row: split button. Body = preview in config; + = add immediately. */
+.q-row {
   display: flex;
   align-items: stretch;
   border-radius: 2px;
   overflow: hidden;
 }
-.q-mi-body,
-.q-mi-add {
+.q-row-body,
+.q-row-add {
   border: none;
   font-family: inherit;
   font-size: 0.6875rem;
@@ -235,40 +240,15 @@ body { margin: 0; overflow: hidden; }
   transition: background 120ms, color 120ms;
   padding: 0.25rem 0.5rem;
 }
-.q-mi-body {
-  flex: 1;
-  text-align: left;
-  border-right: 1px solid rgba(0, 0, 0, 0.25);
-}
-.q-mi-add {
-  flex: 0 0 auto;
-  padding: 0.25rem 0.5rem;
-  color: var(--q-slate);
-  font-weight: 600;
-}
-.q-mi-body:hover { background: #3a6278; }
-.q-mi-add:hover { background: #3a6278; color: var(--q-papaya); }
+.q-row-body { flex: 1; text-align: left; border-right: 1px solid rgba(0, 0, 0, 0.25); }
+.q-row-add { flex: 0 0 auto; color: var(--q-slate); font-weight: 600; }
+.q-row-body:hover { background: #3a6278; }
+.q-row-add:hover { background: #3a6278; color: var(--q-papaya); }
+.q-row--emit { border-left: 2px solid #44cc88; }
+.q-row--collect { border-left: 2px solid var(--q-peach); }
+.q-row--transform { border-left: 2px solid #cc66cc; }
+.q-row--passive { border-left: 2px solid var(--q-slate); }
 
-.q-btn--emit,
-.q-mi--emit { border-left: 2px solid #44cc88; }
-.q-btn--collect,
-.q-mi--collect { border-left: 2px solid var(--q-peach); }
-.q-btn--transform,
-.q-mi--transform { border-left: 2px solid #cc66cc; }
-.q-btn--passive,
-.q-mi--passive { border-left: 2px solid var(--q-slate); }
-
-.q-config-add {
-  background: none;
-  border: none;
-  color: var(--q-slate);
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0 0.25rem;
-  margin-right: 0.25rem;
-}
-.q-config-add:hover { color: #44cc88; }
 /* Node config panel */
 .q-config {
   flex: 0 0 10rem;
@@ -307,6 +287,28 @@ body { margin: 0; overflow: hidden; }
   padding: 0 0.25rem;
 }
 .q-config-close:hover { color: var(--q-peach); }
+
+.q-config-add {
+  background: none;
+  border: none;
+  color: #44cc88;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 0.25rem;
+  margin-right: 0.25rem;
+}
+.q-config-add:hover { color: var(--q-papaya); }
+.q-config-add--off { opacity: 0.18; cursor: default; }
+.q-config-close--off { opacity: 0.18; cursor: default; }
+
+.q-config-empty {
+  font-size: 0.5625rem;
+  color: var(--q-slate);
+  opacity: 0.6;
+  margin-top: 0.5rem;
+  letter-spacing: 0.05em;
+}
 
 .q-cfg-label {
   display: block;

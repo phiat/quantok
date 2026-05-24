@@ -19,6 +19,7 @@ export class WorldRenderer {
     this.canvas = canvas;
     this.meshes = new Map();       // id -> THREE.Group (tokene bg + text)
     this.nodeMeshes = new Map();   // id -> THREE.Group (node)
+    this._highlights = new Map();  // id -> { halo, start, duration }
 
     // Scene
     this.scene = new THREE.Scene();
@@ -324,6 +325,53 @@ export class WorldRenderer {
     return group;
   }
 
+  /** Attach a fading halo around a node (visual ping for newly added nodes). */
+  highlightNode(id, durationMs = 3000) {
+    const group = this.nodeMeshes.get(id);
+    if (!group) return;
+    const body = group.children.find(c => c.userData?.isBody);
+    if (!body) return;
+    const bw = body.geometry.parameters.width;
+    const bh = body.geometry.parameters.height;
+    const pad = 14;
+    const haloGeo = new THREE.PlaneGeometry(bw + pad, bh + pad);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0xffefd3,
+      transparent: true,
+      opacity: 0.95,
+    });
+    const halo = new THREE.Mesh(haloGeo, haloMat);
+    halo.position.z = -0.05;
+    halo.userData.isHighlight = true;
+    group.add(halo);
+    // Drop any previous highlight on the same node
+    const prev = this._highlights.get(id);
+    if (prev) this._disposeHighlight(id, prev);
+    this._highlights.set(id, { halo, start: performance.now(), duration: durationMs });
+  }
+
+  /** Per-frame highlight fade. Call from the render loop. */
+  updateHighlights(now) {
+    for (const [id, h] of this._highlights) {
+      const t = (now - h.start) / h.duration;
+      if (t >= 1) {
+        this._disposeHighlight(id, h);
+      } else {
+        // ease-out cubic: bright at first, soft tail
+        const k = 1 - t;
+        h.halo.material.opacity = 0.95 * k * k * k;
+      }
+    }
+  }
+
+  _disposeHighlight(id, h) {
+    const group = this.nodeMeshes.get(id);
+    if (group) group.remove(h.halo);
+    h.halo.geometry.dispose();
+    h.halo.material.dispose();
+    this._highlights.delete(id);
+  }
+
   /** Update collector buffer slot visuals */
   updateCollectorBuffer(collectorId, buffer) {
     const group = this.nodeMeshes.get(collectorId);
@@ -413,6 +461,7 @@ export class WorldRenderer {
         if (child.dispose) child.dispose();
       });
       this.nodeMeshes.delete(id);
+      this._highlights.delete(id);
     }
   }
 

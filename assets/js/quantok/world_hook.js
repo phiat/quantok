@@ -390,6 +390,8 @@ const WorldCanvas = {
     }
 
     this.nodeData.set(node.id, node);
+    // Flash a fading halo so the user can see where the new node landed
+    this.worldRenderer.highlightNode(node.id, 3000);
   },
 
   onRemoveNode({ node_id }) {
@@ -467,6 +469,9 @@ const WorldCanvas = {
 
     // Apply conveyor surface velocity to tokenes resting on conveyors
     this.applyConveyorForces();
+
+    // Fade any active add-highlights
+    this.worldRenderer.updateHighlights(now);
 
     // Render
     this.worldRenderer.render();
