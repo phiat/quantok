@@ -183,24 +183,29 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_event("add_source_emitter", params, socket) do
-    source_mod = source_module(params["source"])
-    chunker_mod = chunker_module(params["chunker"] || "word")
-    command = params["command"] || ""
-    {x, socket} = next_x(socket)
-    label = params["source"]
+    # Drop unknown sources silently. The Shell source must go through
+    # add_emitter so the @allowed_shell_commands check applies.
+    case source_module(params["source"]) do
+      nil ->
+        {:noreply, socket}
 
-    emitter =
-      Emitter.new(
-        source: source_mod,
-        command: command,
-        chunker: chunker_mod,
-        position: {x, -300.0},
-        label: label
-      )
+      source_mod ->
+        chunker_mod = chunker_module(params["chunker"] || "word")
+        command = params["command"] || ""
+        {x, socket} = next_x(socket)
 
-    {:ok, _} = World.add_node(socket.assigns.world_pid, emitter)
+        emitter =
+          Emitter.new(
+            source: source_mod,
+            command: command,
+            chunker: chunker_mod,
+            position: {x, -300.0},
+            label: params["source"]
+          )
 
-    {:noreply, socket |> push_node(emitter) |> update(:node_count, &(&1 + 1))}
+        {:ok, _} = World.add_node(socket.assigns.world_pid, emitter)
+        {:noreply, socket |> push_node(emitter) |> update(:node_count, &(&1 + 1))}
+    end
   end
 
   def handle_event("add_collector", %{"capacity" => cap_str}, socket) do
@@ -876,7 +881,7 @@ defmodule QuantokWeb.WorldLive do
   defp source_module("file"), do: Quantok.Node.Emitter.File
   defp source_module("manual"), do: Quantok.Node.Emitter.Manual
   defp source_module("sequence"), do: Quantok.Node.Emitter.Sequence
-  defp source_module(_), do: Quantok.Node.Emitter.Shell
+  defp source_module(_), do: nil
 
   defp collector_action("echo"), do: Quantok.Node.Collector.Echo
   defp collector_action("shell"), do: Quantok.Node.Collector.Shell
