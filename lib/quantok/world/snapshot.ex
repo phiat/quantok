@@ -202,7 +202,8 @@ defmodule Quantok.World.Snapshot do
       "friction" => config.friction,
       "restitution" => config.restitution,
       "strength" => config.strength,
-      "radius" => config.radius
+      "radius" => config.radius,
+      "speed" => Map.get(config, :speed, 0.0)
     }
   end
 
@@ -276,18 +277,25 @@ defmodule Quantok.World.Snapshot do
     shape = safe_shape(data["config"]["shape"])
     config = data["config"]
 
-    Passive.new(shape,
-      width: config["width"] || 200.0,
-      height: config["height"] || 10.0,
-      angle: config["angle"] || 0.0,
-      friction: config["friction"] || 0.5,
-      restitution: config["restitution"] || 0.3,
-      strength: config["strength"] || 1.0,
-      radius: config["radius"] || 100.0,
-      position: deserialize_position(data["position"]),
-      label: data["label"]
-    )
+    opts =
+      [
+        width: config["width"] || 200.0,
+        height: config["height"] || 10.0,
+        angle: config["angle"] || 0.0,
+        friction: config["friction"] || 0.5,
+        restitution: config["restitution"] || 0.3,
+        strength: config["strength"] || 1.0,
+        radius: config["radius"] || 100.0,
+        position: deserialize_position(data["position"]),
+        label: data["label"]
+      ]
+      |> maybe_put(:speed, config["speed"])
+
+    Passive.new(shape, opts)
   end
+
+  defp maybe_put(opts, _key, nil), do: opts
+  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp deserialize_position(%{"x" => x, "y" => y}), do: {x * 1.0, y * 1.0}
   defp deserialize_position(_), do: {0.0, 0.0}
@@ -299,7 +307,8 @@ defmodule Quantok.World.Snapshot do
     "Quantok.Node.Emitter.Manual" => Quantok.Node.Emitter.Manual,
     "Quantok.Node.Emitter.Clock" => Quantok.Node.Emitter.Clock,
     "Quantok.Node.Emitter.File" => Quantok.Node.Emitter.File,
-    "Quantok.Node.Emitter.Sequence" => Quantok.Node.Emitter.Sequence
+    "Quantok.Node.Emitter.Sequence" => Quantok.Node.Emitter.Sequence,
+    "Quantok.Node.Emitter.Random" => Quantok.Node.Emitter.Random
   }
 
   @chunker_modules %{
@@ -318,7 +327,8 @@ defmodule Quantok.World.Snapshot do
     "Quantok.Node.Collector.Reverse" => Quantok.Node.Collector.Reverse,
     "Quantok.Node.Collector.Upcase" => Quantok.Node.Collector.Upcase,
     "Quantok.Node.Collector.Count" => Quantok.Node.Collector.Count,
-    "Quantok.Node.Collector.Display" => Quantok.Node.Collector.Display
+    "Quantok.Node.Collector.Display" => Quantok.Node.Collector.Display,
+    "Quantok.Node.Collector.Hash" => Quantok.Node.Collector.Hash
   }
 
   defp safe_trigger_mode("on_full"), do: :on_full
@@ -342,6 +352,7 @@ defmodule Quantok.World.Snapshot do
   defp safe_shape("funnel"), do: :funnel
   defp safe_shape("attractor"), do: :attractor
   defp safe_shape("repeller"), do: :repeller
+  defp safe_shape("conveyor"), do: :conveyor
   defp safe_shape(_), do: :floor
 
   defp safe_collector_command(action, command) do

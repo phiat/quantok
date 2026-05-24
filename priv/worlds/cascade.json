@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "name": "Cascade",
+  "environment": {
+    "gravity": {"x": 0.0, "y": 9.81},
+    "tick_rate": 30,
+    "decay": {"enabled": false, "rate": 1.0, "shatter": "split"}
+  },
+  "nodes": [
+    {
+      "type": "emitter",
+      "label": "pangram",
+      "position": {"x": 0.0, "y": -320.0},
+      "config": {
+        "source": "Quantok.Node.Emitter.Manual",
+        "command": "The quick brown fox jumps over the lazy dog",
+        "chunker": "Quantok.Chunker.Word",
+        "emit_rate": 200,
+        "auto_repeat": false,
+        "repeat_interval": 5000
+      }
+    },
+    {
+      "type": "transformer",
+      "label": "splitter",
+      "position": {"x": 0.0, "y": -140.0},
+      "config": {
+        "effect": "splitter",
+        "radius": 70.0,
+        "strength": 0.5
+      }
+    },
+    {
+      "type": "collector",
+      "label": "reverse · emit",
+      "position": {"x": -180.0, "y": 100.0},
+      "config": {
+        "capacity": 4,
+        "trigger_mode": "on_full",
+        "tick_interval": 120,
+        "action": "Quantok.Node.Collector.Reverse",
+        "command": "echo",
+        "emit": true,
+        "output_chunker": "Quantok.Chunker.Byte",
+        "emit_rate": 80
+      }
+    },
+    {
+      "type": "collector",
+      "label": "upcase · emit",
+      "position": {"x": 180.0, "y": 100.0},
+      "config": {
+        "capacity": 4,
+        "trigger_mode": "on_full",
+        "tick_interval": 120,
+        "action": "Quantok.Node.Collector.Upcase",
+        "command": "echo",
+        "emit": true,
+        "output_chunker": "Quantok.Chunker.Rune",
+        "emit_rate": 80
+      }
+    },
+    {
+      "type": "collector",
+      "label": "count",
+      "position": {"x": 0.0, "y": 250.0},
+      "config": {
+        "capacity": 12,
+        "trigger_mode": "timed",
+        "tick_interval": 150,
+        "action": "Quantok.Node.Collector.Count",
+        "command": "echo",
+        "emit": false,
+        "emit_rate": 250
+      }
+    },
+    {
+      "type": "passive",
+      "label": "left wall",
+      "position": {"x": -520.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 500.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "right wall",
+      "position": {"x": 520.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 500.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "Floor",
+      "position": {"x": 0.0, "y": 360.0},
+      "config": {
+        "shape": "floor",
+        "width": 1100.0,
+        "height": 10.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    }
+  ]
+}

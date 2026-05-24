@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "name": "Conveyor Sort",
+  "environment": {
+    "gravity": {"x": 0.0, "y": 9.81},
+    "tick_rate": 30,
+    "decay": {"enabled": false, "rate": 1.0, "shatter": "split"}
+  },
+  "nodes": [
+    {
+      "type": "emitter",
+      "label": "clock · rune",
+      "position": {"x": -380.0, "y": -320.0},
+      "config": {
+        "source": "Quantok.Node.Emitter.Clock",
+        "command": "%H:%M:%S",
+        "chunker": "Quantok.Chunker.Rune",
+        "emit_rate": 120,
+        "auto_repeat": false,
+        "repeat_interval": 5000
+      }
+    },
+    {
+      "type": "emitter",
+      "label": "random hex",
+      "position": {"x": 380.0, "y": -320.0},
+      "config": {
+        "source": "Quantok.Node.Emitter.Random",
+        "command": "hex:24",
+        "chunker": "Quantok.Chunker.Byte",
+        "emit_rate": 90,
+        "auto_repeat": false,
+        "repeat_interval": 5000
+      }
+    },
+    {
+      "type": "passive",
+      "label": "conveyor →",
+      "position": {"x": -250.0, "y": 80.0},
+      "config": {
+        "shape": "conveyor",
+        "width": 320.0,
+        "height": 12.0,
+        "angle": 0.0,
+        "friction": 0.9,
+        "restitution": 0.05,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 120.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "conveyor ←",
+      "position": {"x": 250.0, "y": 80.0},
+      "config": {
+        "shape": "conveyor",
+        "width": 320.0,
+        "height": 12.0,
+        "angle": 0.0,
+        "friction": 0.9,
+        "restitution": 0.05,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": -120.0
+      }
+    },
+    {
+      "type": "collector",
+      "label": "sha256 · emit",
+      "position": {"x": 0.0, "y": 230.0},
+      "config": {
+        "capacity": 8,
+        "trigger_mode": "on_full",
+        "tick_interval": 120,
+        "action": "Quantok.Node.Collector.Hash",
+        "command": "sha256",
+        "emit": true,
+        "output_chunker": "Quantok.Chunker.Word",
+        "emit_rate": 250
+      }
+    },
+    {
+      "type": "passive",
+      "label": "left wall",
+      "position": {"x": -520.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 500.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "right wall",
+      "position": {"x": 520.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 500.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "Floor",
+      "position": {"x": 0.0, "y": 360.0},
+      "config": {
+        "shape": "floor",
+        "width": 1100.0,
+        "height": 10.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    }
+  ]
+}
