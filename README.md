@@ -121,4 +121,4 @@ just fmt        # format all code
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
