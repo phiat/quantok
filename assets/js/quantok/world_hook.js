@@ -13,6 +13,10 @@ const WorldCanvas = {
     this.nodeData = new Map();
     this.conveyors = new Map(); // id -> { x, y, hw, hh, angle, speed }
     this.sensorCooldown = new Map();
+    // Runtime decay state — overrides per-tokene decay.enabled so toggling
+    // affects existing tokenes, not just newly emitted ones
+    this.decayEnabled = false;
+    this.decayRate = 1.0;
     this._pendingShatter = new Set();
     this._pendingTimeouts = [];
     this._ready = false;
@@ -29,6 +33,7 @@ const WorldCanvas = {
     this.handleEvent("clear_nodes", (data) => this._dispatch("clear_nodes", data));
     this.handleEvent("update_collector", (data) => this._dispatch("update_collector", data));
     this.handleEvent("shatter_tokene", (data) => this._dispatch("shatter_tokene", data));
+    this.handleEvent("set_decay", (data) => this._dispatch("set_decay", data));
 
     // Async init
     this.rapier = await initRapier();
@@ -98,6 +103,7 @@ const WorldCanvas = {
       case "clear_nodes":      this.onClearNodes(); break;
       case "update_collector": this.onUpdateCollector(data); break;
       case "shatter_tokene":  this.onShatterTokene(data); break;
+      case "set_decay":        this.onSetDecay(data); break;
     }
   },
 
@@ -406,6 +412,11 @@ const WorldCanvas = {
     this.physics.setGravity(x, y);
   },
 
+  onSetDecay({ enabled, rate }) {
+    this.decayEnabled = !!enabled;
+    if (typeof rate === "number") this.decayRate = rate;
+  },
+
   onClearTokenes() {
     for (const id of this.tokeneData.keys()) {
       this.physics.remove(id);
@@ -450,17 +461,32 @@ const WorldCanvas = {
       this.pushEvent("tokene_offscreen", { tokene_id: id });
     }
 
-    // Visual decay: compute integrity per-frame for decaying tokenes
+    // Visual decay: compute integrity per-frame for decaying tokenes.
+    // Honors the runtime decayEnabled flag so toggling decay also pulls
+    // already-existing tokenes into the decay regime, not just new ones.
     const now = performance.now();
-    for (const [id, t] of this.tokeneData) {
-      if (!t.decay || !t.decay.enabled || !t.decay.half_life) continue;
-      const elapsed = now - (t._spawnedAt || now);
-      const initialIntegrity = t.integrity || 0.5;
-      const ratio = initialIntegrity * Math.pow(0.5, elapsed / t.decay.half_life);
-      this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
-      if (ratio < 0.05 * initialIntegrity && !this._pendingShatter.has(id)) {
-        this._pendingShatter.add(id);
-        this.pushEvent("tokene_shattered", { tokene_id: id });
+    if (this.decayEnabled) {
+      // Anchor decay to the toggle moment for tokenes spawned before decay was on,
+      // so they don't snap straight to "shattered" the moment you flip the toggle.
+      if (this._decayAnchor == null) this._decayAnchor = now;
+      const rate = this.decayRate || 1;
+      for (const [id, t] of this.tokeneData) {
+        if (!t.decay || !t.decay.half_life) continue;
+        const startedAt = Math.max(t._spawnedAt || now, this._decayAnchor);
+        const elapsed = (now - startedAt) * rate;
+        const initialIntegrity = t.integrity || 0.5;
+        const ratio = initialIntegrity * Math.pow(0.5, elapsed / t.decay.half_life);
+        this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
+        if (ratio < 0.05 * initialIntegrity && !this._pendingShatter.has(id)) {
+          this._pendingShatter.add(id);
+          this.pushEvent("tokene_shattered", { tokene_id: id });
+        }
+      }
+    } else {
+      this._decayAnchor = null;
+      // Reset visual decay for any tokene that was mid-fade
+      for (const [id] of this.tokeneData) {
+        this.worldRenderer.updateTokeneDecay(id, 1.0);
       }
     }
 

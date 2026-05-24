@@ -38,7 +38,10 @@ export class PhysicsWorld {
     const bodyDesc = RigidBodyDesc.dynamic()
       .setTranslation(x, y)
       .setLinearDamping(0.05)
-      .setAngularDamping(5.0);
+      .setAngularDamping(5.0)
+      // CCD so fast-falling tokenes can't tunnel through thin colliders
+      // (conveyors are ~12px tall, tokenes can hit them at >300 px/s)
+      .setCcdEnabled(true);
     const body = this.world.createRigidBody(bodyDesc);
 
     const colliderDesc = ColliderDesc.cuboid(hw, hh)

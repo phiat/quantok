@@ -101,11 +101,11 @@
     {
       "type": "passive",
       "label": "conveyor →",
-      "position": {"x": -260.0, "y": 130.0},
+      "position": {"x": -320.0, "y": 130.0},
       "config": {
         "shape": "conveyor",
-        "width": 240.0,
-        "height": 12.0,
+        "width": 360.0,
+        "height": 16.0,
         "angle": 0.0,
         "friction": 0.9,
         "restitution": 0.05,
@@ -117,11 +117,11 @@
     {
       "type": "passive",
       "label": "conveyor ←",
-      "position": {"x": 260.0, "y": 130.0},
+      "position": {"x": 320.0, "y": 130.0},
       "config": {
         "shape": "conveyor",
-        "width": 240.0,
-        "height": 12.0,
+        "width": 360.0,
+        "height": 16.0,
         "angle": 0.0,
         "friction": 0.9,
         "restitution": 0.05,

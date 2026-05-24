@@ -150,13 +150,21 @@ defmodule QuantokWeb.WorldLive do
   def handle_event("toggle_decay", _params, socket) do
     new_enabled = !socket.assigns.decay_enabled
     World.set_decay(socket.assigns.world_pid, %{enabled: new_enabled})
-    {:noreply, assign(socket, :decay_enabled, new_enabled)}
+
+    {:noreply,
+     socket
+     |> assign(:decay_enabled, new_enabled)
+     |> push_event("set_decay", %{enabled: new_enabled, rate: socket.assigns.decay_rate})}
   end
 
   def handle_event("set_decay_rate", %{"rate" => rate_str}, socket) do
     rate = String.to_float(rate_str)
     World.set_decay(socket.assigns.world_pid, %{rate: rate})
-    {:noreply, assign(socket, :decay_rate, rate)}
+
+    {:noreply,
+     socket
+     |> assign(:decay_rate, rate)
+     |> push_event("set_decay", %{enabled: socket.assigns.decay_enabled, rate: rate})}
   end
 
   def handle_event("set_decay_shatter", %{"shatter" => shatter}, socket) do
