@@ -6,9 +6,15 @@ Emitters produce **tokenes** from commands and data. Tokenes fall through a 2D w
 
 ## Quick Start
 
+Quantok depends on a sibling [tiktokenex](https://github.com/phiat/tiktokenex) repo for BPE tokenization. Clone it next to this repo first:
+
 ```bash
-just setup   # install deps, create db, download BPE ranks
-just dev     # start Phoenix server with IEx
+git clone https://github.com/phiat/tiktokenex.git ../tiktokenex
+cd ../tiktokenex && just setup   # fetch deps, download BPE ranks
+cd -                             # back to quantok
+
+just setup   # install deps, create db
+just run     # start Phoenix server with IEx
 ```
 
 Open [localhost:4000](http://localhost:4000). You'll see an emitter, a floor, and a collector. Click **fire all** to watch `date` output fall as word-tokenes.
@@ -95,8 +101,8 @@ See [docs/collector-buffers.md](docs/collector-buffers.md) for the full redesign
 ## Development
 
 ```bash
-just check      # run tests + credo + compile warnings (both projects)
-just test       # quantok tests only
+just check      # run tests + credo + compile warnings
+just test       # run tests
 just lint       # credo --strict
 just fmt        # format all code
 ```
