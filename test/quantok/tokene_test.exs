@@ -194,6 +194,34 @@ defmodule Quantok.TokeneTest do
       assert Tokene.base_half_life(:byte) == 120_000
       assert Tokene.base_half_life(:bit) == :infinite
     end
+
+    test "token_id is more stable than token (it's the compressed form)" do
+      assert Tokene.base_half_life(:token_id) > Tokene.base_half_life(:token)
+    end
+  end
+
+  describe "token_id encoding" do
+    test "creates with numeric value, has higher integrity than token" do
+      tok = Tokene.new("hello", :token, "src")
+      tid = Tokene.new("15339", :token_id, "src")
+
+      assert tid.encoding == :token_id
+      assert tid.value == "15339"
+      assert tid.integrity > tok.integrity
+    end
+
+    test "child_encoding/1 routes token_id to rune (digit chars)" do
+      assert Tokene.child_encoding(:token_id) == :rune
+    end
+
+    test "splittable and splits its digit string into runes" do
+      t = Tokene.new("15339", :token_id, decay: %{enabled: true, rate: 1.0, shatter: :split})
+      assert Tokene.splittable?(t)
+      {:ok, :split, children} = Tokene.shatter(t)
+      assert length(children) == 5
+      assert Enum.all?(children, &(&1.encoding == :rune))
+      assert Enum.map(children, & &1.value) == ["1", "5", "3", "3", "9"]
+    end
   end
 
   describe "shatter/1" do

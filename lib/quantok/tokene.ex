@@ -16,7 +16,7 @@ defmodule Quantok.Tokene do
   """
 
   @type encoding ::
-          :bit | :byte | :rune | :token | :ngram | :word | :phrase | :sentence
+          :bit | :byte | :rune | :token | :token_id | :ngram | :word | :phrase | :sentence
 
   @type shatter :: :split | :dissolve | :explode | :fossilize
 
@@ -58,6 +58,9 @@ defmodule Quantok.Tokene do
     byte: 0.95,
     rune: 0.8,
     token: 0.6,
+    # token_id is the numeric form of a token — same granularity, but a more
+    # "compressed" representation, so we give it slightly higher integrity.
+    token_id: 0.7,
     ngram: 0.5,
     word: 0.4,
     phrase: 0.2,
@@ -71,6 +74,7 @@ defmodule Quantok.Tokene do
     phrase: 15_000,
     word: 30_000,
     token: 45_000,
+    token_id: 60_000,
     ngram: 50_000,
     rune: 60_000,
     byte: 120_000,
@@ -202,8 +206,14 @@ defmodule Quantok.Tokene do
   @doc """
   Returns the encoding one level below in the split hierarchy.
   Returns nil if already at the atomic level (:bit).
+
+  `:token_id` is not in the linear hierarchy (it's an alternate representation
+  of `:token`, not a finer granularity), but splitting a token_id chunks its
+  digit string into rune characters, so we route it to `:rune`.
   """
   @spec child_encoding(encoding()) :: encoding() | nil
+  def child_encoding(:token_id), do: :rune
+
   def child_encoding(encoding) do
     case Enum.drop_while(@split_hierarchy, &(&1 != encoding)) do
       [^encoding, child | _] -> child

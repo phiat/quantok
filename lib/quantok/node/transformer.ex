@@ -72,7 +72,7 @@ defmodule Quantok.Node.Transformer do
   def apply_effect(%Node{config: %{effect: :tiktoken}}, tokene) do
     tokene.value
     |> Tiktokenex.encode()
-    |> Enum.map(&Tokene.new(Integer.to_string(&1), :token, tokene.source_id))
+    |> Enum.map(&Tokene.new(Integer.to_string(&1), :token_id, tokene.source_id))
   rescue
     _ -> [tokene]
   end

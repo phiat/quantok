@@ -8,6 +8,9 @@ export const ENCODING_COLORS = {
   byte:     0x66aaee,
   rune:     0xeea855,
   token:    0x55ddaa,
+  // token_id is the numeric form of a token — gold to distinguish it visually
+  // from text tokens (mint green) so the two representations don't blur.
+  token_id: 0xffd166,
   ngram:    0x55dddd,
   word:     0xffc49b,  // peach glow
   phrase:   0xee9933,

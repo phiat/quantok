@@ -15,6 +15,7 @@ const BASE_HALF_LIFE = {
   phrase: 15_000,
   word: 30_000,
   token: 45_000,
+  token_id: 60_000,
   ngram: 50_000,
   rune: 60_000,
   byte: 120_000,

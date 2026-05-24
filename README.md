@@ -73,6 +73,8 @@ The core mechanic. The same data chunked at different granularities produces tok
 
 Smaller chunks = lighter, more numerous. Larger chunks = heavier, fewer. A sentence-boulder behaves very differently from a stream of bit-sand.
 
+Tokens have two forms. The `token` encoding above is the **text chunk** form — what the BPE chunker emits and what `splitter` produces from a `word`. There is also a `token_id` encoding — the **numeric ID** form (`13347 4435 0 32710 564`) — produced only by the **tiktoken transformer**. Visually they are distinct colors (mint green vs gold) so the two representations don't blur. Splitting a `token_id` chunks its digit string into runes.
+
 ## Tokene Decay
 
 Tokenes can optionally decay over time. Each encoding level has a base half-life — coarse encodings (sentences, phrases) decay fast while fine encodings (bytes, bits) are stable or indestructible. Toggle decay globally from the topbar.
