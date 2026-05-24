@@ -2,7 +2,7 @@
   "version": 1,
   "name": "Hello World",
   "environment": {
-    "gravity": {"x": 0.0, "y": 9.81},
+    "gravity": {"x": 0.0, "y": 150.0},
     "tick_rate": 30
   },
   "nodes": [

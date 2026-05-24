@@ -77,8 +77,7 @@ defmodule QuantokWeb.WorldSidebar do
         params={
           %{
             "source" => "manual",
-            "command" =>
-              "🚀🌌💫🌟⚡🔥💧🌱🌳🌲🌴🍀🌷🌹🌻🌼🍄🌊🌋🏔️🐶🐱🐭🐰🦊🐻🐼🦁🐢🦋🐝🐙🦀🍎🍊🍋🍌🍉🍇🍓🍑🍕🍔🍟😀😎🤔🤖⚽🎨",
+            "command" => "🚀🌌💫🌟⚡🔥💧🌱🌳🌲🌴🍀🌷🌹🌻🌼🍄🌊🌋🏔️🐶🐱🐭🐰🦊🐻🐼🦁🐢🦋🐝🐙🦀🍎🍊🍋🍌🍉🍇🍓🍑🍕🍔🍟😀😎🤔🤖⚽🎨",
             "chunker" => "rune"
           }
         }

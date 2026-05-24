@@ -145,6 +145,21 @@ defmodule Quantok.ChunkerTest do
       assert chunks == ["a", "b", "c"]
     end
 
+    test "splits on conjunctions" do
+      assert Chunker.Phrase.chunk("rise and shine") == ["rise", "shine"]
+      assert Chunker.Phrase.chunk("now or never") == ["now", "never"]
+    end
+
+    test "groups bare strings into phrase-sized chunks" do
+      # Without punctuation or conjunctions, bare text gets grouped a few words
+      # at a time so a long string still emits phrase-sized tokenes rather than
+      # one sentence-sized blob.
+      assert Chunker.Phrase.chunk("hello world") == ["hello world"]
+
+      assert Chunker.Phrase.chunk("the quick brown fox jumps over the lazy dog") ==
+               ["the quick brown", "fox jumps over", "the lazy dog"]
+    end
+
     test "empty input" do
       assert Chunker.Phrase.chunk("") == []
     end
