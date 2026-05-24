@@ -84,6 +84,9 @@ Tokenes can optionally decay over time. Each encoding level has a base half-life
 | sentence | 8s        | fragile boulder |
 | phrase   | 15s       | crumbling block |
 | word     | 30s       | weathering brick |
+| token    | 45s       | stone, slow weathering |
+| token_id | 60s       | compressed, more stable |
+| rune     | 60s       | pebble, hardy |
 | byte     | 2 min     | slow erosion |
 | bit      | infinite  | indestructible |
 
