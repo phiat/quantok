@@ -122,6 +122,15 @@ release-check:
 prod-run:
     MIX_ENV=prod mix phx.server
 
+# One-time: install Playwright + headless Chromium (~150MB) for screenshot automation
+screenshots-setup:
+    cd assets && npm install --save-dev playwright
+    cd assets && npx playwright install chromium
+
+# Capture demo screenshots (server must be running at localhost:4000)
+screenshots:
+    cd assets && node ../scripts/screenshots.mjs
+
 # Clean build artifacts
 clean:
     mix clean

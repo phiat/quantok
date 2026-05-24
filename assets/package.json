@@ -14,5 +14,8 @@
     "@dimforge/rapier2d-compat": "^0.19.3",
     "three": "^0.183.2",
     "troika-three-text": "^0.52.4"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
   }
 }
