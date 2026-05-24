@@ -70,6 +70,19 @@ defmodule QuantokWeb.WorldSidebar do
         event="add_source_emitter"
         params={%{"source" => "shell", "command" => "echo hello", "chunker" => "word"}}
       />
+      <.item
+        label="emoji · rune"
+        variant="emit"
+        event="add_source_emitter"
+        params={
+          %{
+            "source" => "manual",
+            "command" =>
+              "🚀🌌💫🌟⚡🔥💧🌱🌳🌲🌴🍀🌷🌹🌻🌼🍄🌊🌋🏔️🐶🐱🐭🐰🦊🐻🐼🦁🐢🦋🐝🐙🦀🍎🍊🍋🍌🍉🍇🍓🍑🍕🍔🍟😀😎🤔🤖⚽🎨",
+            "chunker" => "rune"
+          }
+        }
+      />
 
       <div class="q-section">Collectors</div>
       <.item

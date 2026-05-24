@@ -50,9 +50,12 @@ config :quantok, QuantokWeb.Endpoint,
 # different ports.
 
 # Reload browser tabs when matching files change.
+#
+# `web_console_logger: false` — keep noisy phx event logs out of the browser
+# console; the BEAM log is still available in the shell if needed.
 config :quantok, QuantokWeb.Endpoint,
   live_reload: [
-    web_console_logger: true,
+    web_console_logger: false,
     patterns: [
       # Static assets, except user uploads
       ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$"E,
@@ -69,6 +72,11 @@ config :quantok, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
+
+# Quiet high-frequency phx-event debug logs. The simulation pushes
+# tokene_offscreen / tokene_shattered every few frames, which produces
+# constant "[debug] HANDLE EVENT" spam at the default :debug level.
+config :logger, level: :info
 
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.

@@ -72,8 +72,11 @@ export class WorldRenderer {
       this.composer = new EffectComposer(this.renderer);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
 
+      // Bloom convolution scales with input resolution. Feeding the pass a
+      // half-size Vector2 cuts its work to ~1/4 with very little visual loss
+      // at the subtle strength we use.
       this.bloomPass = new UnrealBloomPass(
-        new THREE.Vector2(w, h),
+        new THREE.Vector2(Math.round(w / 2), Math.round(h / 2)),
         0.15,   // strength (subtle)
         0.4,    // radius
         0.85    // threshold
@@ -585,7 +588,11 @@ export class WorldRenderer {
     this._baseW = w;
     this._baseH = h;
     this.renderer.setSize(w, h);
-    if (this._useComposer) this.composer.setSize(w, h);
+    if (this._useComposer) {
+      this.composer.setSize(w, h);
+      // Keep bloom at half-res when the window changes.
+      if (this.bloomPass?.setSize) this.bloomPass.setSize(Math.round(w / 2), Math.round(h / 2));
+    }
     this._updateCamera();
   }
 

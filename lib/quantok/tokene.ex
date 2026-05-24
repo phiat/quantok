@@ -253,7 +253,7 @@ defmodule Quantok.Tokene do
   """
   @spec splittable?(t()) :: boolean()
   def splittable?(%__MODULE__{encoding: :bit}), do: false
-  def splittable?(%__MODULE__{byte_size: 1, encoding: :byte}), do: false
+  # A 1-byte byte tokene is still splittable into 8 bits — atomic only at :bit.
   def splittable?(%__MODULE__{}), do: true
 
   @doc """

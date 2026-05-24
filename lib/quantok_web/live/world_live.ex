@@ -185,7 +185,7 @@ defmodule QuantokWeb.WorldLive do
       source_mod ->
         chunker_mod = chunker_module(params["chunker"] || "word")
         command = params["command"] || ""
-        {x, socket} = next_x(socket)
+        {x, socket} = next_x(socket, -300.0)
 
         emitter =
           Emitter.new(
@@ -208,7 +208,7 @@ defmodule QuantokWeb.WorldLive do
 
   def handle_event("add_collector", %{"capacity" => cap_str}, socket) do
     capacity = String.to_integer(cap_str)
-    {x, socket} = next_x(socket)
+    {x, socket} = next_x(socket, 250.0)
     collector = Collector.new(capacity: capacity, position: {x, 250.0}, label: "Collector")
     {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
 
@@ -222,7 +222,7 @@ defmodule QuantokWeb.WorldLive do
   def handle_event("add_typed_collector", %{"action" => action, "capacity" => cap_str}, socket) do
     capacity = String.to_integer(cap_str)
     action_mod = collector_action(action)
-    {x, socket} = next_x(socket)
+    {x, socket} = next_x(socket, 250.0)
     label = String.capitalize(action)
 
     collector =
@@ -247,7 +247,7 @@ defmodule QuantokWeb.WorldLive do
   def handle_event("add_timed_collector", %{"capacity" => cap_str, "interval" => int_str}, socket) do
     capacity = String.to_integer(cap_str)
     interval = String.to_integer(int_str)
-    {x, socket} = next_x(socket)
+    {x, socket} = next_x(socket, 250.0)
 
     collector =
       Collector.new(
@@ -277,7 +277,7 @@ defmodule QuantokWeb.WorldLive do
     capacity = String.to_integer(cap_str)
     action_mod = collector_action(action)
     chunker_mod = chunker_module(chunker)
-    {x, socket} = next_x(socket)
+    {x, socket} = next_x(socket, 250.0)
     label = String.capitalize(action) <> " emit"
 
     collector =
@@ -305,7 +305,7 @@ defmodule QuantokWeb.WorldLive do
         {:noreply, socket}
 
       effect_atom ->
-        {x, socket} = next_x(socket)
+        {x, socket} = next_x(socket, 0.0)
         transformer = Transformer.new(effect_atom, position: {x, 0.0}, radius: 60.0)
         {:ok, _} = World.add_node(socket.assigns.world_pid, transformer)
 
@@ -323,7 +323,7 @@ defmodule QuantokWeb.WorldLive do
         {:noreply, socket}
 
       shape_atom ->
-        {x, socket} = next_x(socket)
+        {x, socket} = next_x(socket, 100.0)
         passive = Passive.new(shape_atom, passive_opts(shape_atom, params, x))
         {:ok, _} = World.add_node(socket.assigns.world_pid, passive)
 
@@ -488,8 +488,8 @@ defmodule QuantokWeb.WorldLive do
         {:noreply, socket}
 
       template ->
-        {x, socket} = next_x(socket)
         {_px, py} = template.position
+        {x, socket} = next_x(socket, py)
         node = %{template | position: {x, py}}
         {:ok, _} = World.add_node(socket.assigns.world_pid, node)
 
@@ -988,12 +988,32 @@ defmodule QuantokWeb.WorldLive do
   defp chunker_module("sentence"), do: Quantok.Chunker.Sentence
   defp chunker_module(_), do: Quantok.Chunker.Word
 
-  # Deterministic stagger: alternates left/right of center, growing outward
-  defp next_x(socket) do
-    n = socket.assigns.next_x
-    # Sequence: 0, -120, 120, -240, 240, -360, ...
-    x = if n == 0, do: 0.0, else: div(n + 1, 2) * 120.0 * if(rem(n, 2) == 1, do: -1, else: 1)
-    {x, assign(socket, :next_x, n + 1)}
+  # Pick the next x position that isn't already occupied. Walks the staggered
+  # sequence (0, -120, 120, -240, ...) and skips any slot near an existing
+  # node at roughly the same y row.
+  defp next_x(socket, y) do
+    world = World.get_state(socket.assigns.world_pid)
+    occupied = Enum.map(world.nodes, fn {_, n} -> n.position end)
+
+    x =
+      0
+      |> Stream.iterate(&(&1 + 1))
+      |> Stream.map(&staggered_x/1)
+      |> Stream.drop_while(fn cx -> overlaps?(occupied, cx, y) end)
+      |> Enum.at(0)
+
+    {x, assign(socket, :next_x, socket.assigns.next_x + 1)}
+  end
+
+  defp staggered_x(0), do: 0.0
+
+  defp staggered_x(n),
+    do: div(n + 1, 2) * 120.0 * if(rem(n, 2) == 1, do: -1, else: 1)
+
+  defp overlaps?(occupied, cx, y) do
+    Enum.any?(occupied, fn {ox, oy} ->
+      abs(ox - cx) < 80 and (is_nil(y) or abs(oy - y) < 100)
+    end)
   end
 
   defp saves_dir do

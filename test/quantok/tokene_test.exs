@@ -100,8 +100,11 @@ defmodule Quantok.TokeneTest do
       refute Tokene.splittable?(Tokene.new("x", :bit))
     end
 
-    test "single bytes cannot be split" do
-      refute Tokene.splittable?(Tokene.new("x", :byte))
+    test "single bytes can be split into bits" do
+      # Single-byte tokenes are atomic at the byte level but still
+      # decomposable into 8 bits, so the cascade word→token→rune→byte→bit
+      # never dead-ends prematurely.
+      assert Tokene.splittable?(Tokene.new("x", :byte))
     end
 
     test "multi-byte bytes can be split" do
@@ -227,9 +230,31 @@ defmodule Quantok.TokeneTest do
       assert fossil.decay.enabled == false
     end
 
-    test "unsplittable tokene fossilizes on split" do
-      t = Tokene.new("x", :byte, decay: %{enabled: true, rate: 1.0, shatter: :split})
+    test "bit tokene fossilizes on split (only truly-atomic level)" do
+      t = Tokene.new("1", :bit, decay: %{enabled: true, rate: 1.0, shatter: :split})
       {:ok, :fossilize, [fossil]} = Tokene.shatter(t)
+      assert fossil.decay.enabled == false
+    end
+
+    test "split cascade reaches bits all the way down" do
+      # Hierarchy: word -> token -> rune -> byte -> bit -> (fossilize)
+      start = Tokene.new("hi", :word, decay: %{enabled: true, rate: 1.0, shatter: :split})
+
+      final =
+        Enum.reduce([:token, :rune, :byte, :bit], start, fn target, parent ->
+          {:ok, :split, children} = Tokene.shatter(parent)
+          assert children != [], "no children when splitting from #{parent.encoding}"
+          child = hd(children)
+          assert child.encoding == target, "expected #{target}, got #{child.encoding}"
+          # Children spawn with shatter: :split by default; we don't need to
+          # re-attach decay since shatter only reads decay.shatter.
+          child
+        end)
+
+      # At a bit. Further shatter must fossilize, not split.
+      assert final.encoding == :bit
+      {:ok, :fossilize, [fossil]} = Tokene.shatter(final)
+      assert fossil.encoding == :bit
       assert fossil.decay.enabled == false
     end
   end

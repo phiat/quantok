@@ -479,18 +479,68 @@ const WorldCanvas = {
     // Step physics
     this.physics.step();
 
-    // Sync Three.js meshes with Rapier bodies
-    const offscreen = [];
-    for (const [id] of this.tokeneData) {
-      const transform = this.physics.getTransform(id);
-      if (transform) {
-        this.worldRenderer.updateTokeneTransform(id, transform.x, -transform.y, -transform.rotation);
+    const now = performance.now();
+    const decayOn = this.decayEnabled;
+    if (decayOn && this._decayAnchor == null) this._decayAnchor = now;
+    const decayRate = this.decayRate || 1;
+    const decayAnchor = this._decayAnchor;
 
-        if (Math.abs(transform.y) > OFFSCREEN_THRESHOLD || Math.abs(transform.x) > OFFSCREEN_THRESHOLD) {
-          offscreen.push(id);
-        }
+    // Pre-compute per-conveyor trig so the inner loop is cheap.
+    const conveyorCount = this.conveyors.size;
+    let convList = null;
+    if (conveyorCount > 0) {
+      convList = [];
+      for (const conv of this.conveyors.values()) {
+        const cos = Math.cos(conv.angle);
+        const sin = Math.sin(conv.angle);
+        convList.push({ conv, cos, sin });
       }
     }
+
+    // Single pass over tokeneData: transform sync + offscreen check + decay +
+    // conveyor force. Previously each was its own iteration, paying for the
+    // WASM crossing to fetch transforms multiple times per tokene per frame.
+    const offscreen = [];
+    for (const [id, t] of this.tokeneData) {
+      const transform = this.physics.getTransform(id);
+      if (!transform) continue;
+
+      // 1) Render sync
+      this.worldRenderer.updateTokeneTransform(id, transform.x, -transform.y, -transform.rotation);
+
+      // 2) Offscreen culling
+      if (Math.abs(transform.y) > OFFSCREEN_THRESHOLD || Math.abs(transform.x) > OFFSCREEN_THRESHOLD) {
+        offscreen.push(id);
+        continue;
+      }
+
+      // 3) Decay
+      if (decayOn) {
+        const halfLife = BASE_HALF_LIFE[t.encoding];
+        if (halfLife) {
+          const startedAt = Math.max(t._spawnedAt || now, decayAnchor);
+          const elapsed = (now - startedAt) * decayRate;
+          const initialIntegrity = t.integrity || 0.5;
+          const ratio = initialIntegrity * Math.pow(0.5, elapsed / halfLife);
+          this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
+          if (ratio < 0.05 * initialIntegrity && !this._pendingShatter.has(id)) {
+            this._pendingShatter.add(id);
+            this.pushEvent("tokene_shattered", { tokene_id: id });
+          }
+        }
+      } else if (this._lastDecayState) {
+        // One-shot reset when decay was just turned off
+        this.worldRenderer.updateTokeneDecay(id, 1.0);
+      }
+
+      // 4) Conveyor surface drag
+      if (convList) {
+        this._applyConveyorForceToTokene(id, t, transform, convList);
+      }
+    }
+    if (!decayOn) this._decayAnchor = null;
+    this._lastDecayState = decayOn;
+
     // Remove offscreen tokenes after iteration (avoid mutating Map during iteration)
     for (const id of offscreen) {
       this.physics.remove(id);
@@ -499,41 +549,8 @@ const WorldCanvas = {
       this.pushEvent("tokene_offscreen", { tokene_id: id });
     }
 
-    // Visual decay: compute integrity per-frame for every tokene.
-    // The runtime decayEnabled flag drives all tokenes uniformly — half-life
-    // comes from the per-encoding base table, so tokenes spawned with decay
-    // disabled still fade once the toggle flips on. Anchor at toggle time so
-    // older tokenes don't snap straight to shatter.
-    const now = performance.now();
-    if (this.decayEnabled) {
-      if (this._decayAnchor == null) this._decayAnchor = now;
-      const rate = this.decayRate || 1;
-      for (const [id, t] of this.tokeneData) {
-        const halfLife = BASE_HALF_LIFE[t.encoding];
-        if (!halfLife) continue; // bit / unknown encoding — inert
-        const startedAt = Math.max(t._spawnedAt || now, this._decayAnchor);
-        const elapsed = (now - startedAt) * rate;
-        const initialIntegrity = t.integrity || 0.5;
-        const ratio = initialIntegrity * Math.pow(0.5, elapsed / halfLife);
-        this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
-        if (ratio < 0.05 * initialIntegrity && !this._pendingShatter.has(id)) {
-          this._pendingShatter.add(id);
-          this.pushEvent("tokene_shattered", { tokene_id: id });
-        }
-      }
-    } else {
-      this._decayAnchor = null;
-      // Reset visual decay for any tokene that was mid-fade
-      for (const [id] of this.tokeneData) {
-        this.worldRenderer.updateTokeneDecay(id, 1.0);
-      }
-    }
-
     // Check sensor intersections (collectors + transformers)
     this.checkSensorIntersections();
-
-    // Apply conveyor surface velocity to tokenes resting on conveyors
-    this.applyConveyorForces();
 
     // Fade any active add-highlights
     this.worldRenderer.updateHighlights(now);
@@ -573,42 +590,34 @@ const WorldCanvas = {
     }
   },
 
-  applyConveyorForces() {
-    if (this.conveyors.size === 0) return;
-    // Coupling factor: how aggressively to drag tokenes toward target tangent speed.
-    // 0 = no drag, 1 = snap to target instantly. ~0.15 feels like sticky tape.
-    const k = 0.15;
-    // How far above the top surface (in conveyor-local Y) a tokene can be and still get dragged.
-    const contactBand = 4;
+  /**
+   * Per-tokene conveyor surface drag. Called inside the main animate loop
+   * with a pre-fetched transform so we don't pay for an extra
+   * physics.getTransform per conveyor per tokene per frame.
+   */
+  _applyConveyorForceToTokene(tid, tdata, xform, convList) {
+    const k = 0.15;          // tangent-speed coupling
+    const contactBand = 4;   // px above the surface that still counts as resting
+    const thx = (tdata.width || 16) / 2;
+    const thy = (tdata.height || 16) / 2;
 
-    for (const [, conv] of this.conveyors) {
-      const cos = Math.cos(conv.angle);
-      const sin = Math.sin(conv.angle);
-      const tx = cos, ty = sin;
-
-      for (const [tid, tdata] of this.tokeneData) {
-        const xform = this.physics.getTransform(tid);
-        if (!xform) continue;
-        const dx = xform.x - conv.x;
-        const dy = xform.y - conv.y;
-        // project to conveyor's local frame: localX = along surface, localY = perpendicular
-        const localX = dx * cos + dy * sin;
-        const localY = -dx * sin + dy * cos;
-        // tokene half-extents
-        const thx = (tdata.width || 16) / 2;
-        const thy = (tdata.height || 16) / 2;
-        // Must be over the surface horizontally, and just above it (Rapier Y-down: above = localY < 0)
-        if (Math.abs(localX) > conv.hw + thx) continue;
-        if (localY > -conv.hh + 1) continue; // not above
-        if (localY < -conv.hh - thy - contactBand) continue; // too far above
-        const body = this.physics.getBody(tid);
-        if (!body) continue;
-        const v = body.linvel();
-        const vt = v.x * tx + v.y * ty;
-        const dv = (conv.speed - vt) * k;
-        const m = body.mass() || 1;
-        body.applyImpulse({ x: tx * dv * m, y: ty * dv * m }, true);
-      }
+    for (let i = 0; i < convList.length; i++) {
+      const { conv, cos, sin } = convList[i];
+      const dx = xform.x - conv.x;
+      const dy = xform.y - conv.y;
+      // Conveyor-local coords
+      const localX = dx * cos + dy * sin;
+      const localY = -dx * sin + dy * cos;
+      if (Math.abs(localX) > conv.hw + thx) continue;
+      if (localY > -conv.hh + 1) continue;                 // not above
+      if (localY < -conv.hh - thy - contactBand) continue; // too far above
+      const body = this.physics.getBody(tid);
+      if (!body) continue;
+      const v = body.linvel();
+      const vt = v.x * cos + v.y * sin;
+      const dv = (conv.speed - vt) * k;
+      const m = body.mass() || 1;
+      body.applyImpulse({ x: cos * dv * m, y: sin * dv * m }, true);
     }
   },
 
