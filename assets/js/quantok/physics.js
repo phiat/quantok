@@ -74,14 +74,19 @@ export class PhysicsWorld {
     return body;
   }
 
-  /** Create a kinematic body for draggable nodes */
-  spawnKinematic(id, x, y, hw, hh) {
+  /**
+   * Create a kinematic body for draggable nodes.
+   * Pass `{ passthrough: true }` to make the cuboid collider a sensor so
+   * tokenes pass through (used by transformers).
+   */
+  spawnKinematic(id, x, y, hw, hh, opts = {}) {
     const { RigidBodyDesc, ColliderDesc } = this.rapier;
     const bodyDesc = RigidBodyDesc.kinematicPositionBased()
       .setTranslation(x, y);
     const body = this.world.createRigidBody(bodyDesc);
 
-    const colliderDesc = ColliderDesc.cuboid(hw, hh);
+    let colliderDesc = ColliderDesc.cuboid(hw, hh);
+    if (opts.passthrough) colliderDesc = colliderDesc.setSensor(true);
     const collider = this.world.createCollider(colliderDesc, body);
 
     this.bodies.set(id, body);

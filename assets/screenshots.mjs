@@ -36,25 +36,45 @@ async function main() {
   const page = await ctx.newPage();
 
   console.log(`Loading ${BASE} ...`);
-  await page.goto(BASE, { waitUntil: "networkidle" });
+  // LiveView holds a persistent websocket so "networkidle" never fires.
+  await page.goto(BASE, { waitUntil: "domcontentloaded" });
   await ready(page);
+
+  const fire = () => page.locator('button.q-tb:has-text("fire all")').first().click();
+  const clear = () => page.locator('button.q-tb:has-text("clear")').first().click();
+  const load = (name) => page.locator(`button.q-tb--load:has-text("${name}")`).first().click();
 
   // 1) Default sandbox at rest (just-mounted)
   await snap(page, "01-default-startup.png", "default sandbox at rest");
 
-  // 2) Default sandbox firing: hit "fire all", wait 4s
-  await page.locator('button.q-tb:has-text("fire all")').first().click();
-  await sleep(4000);
+  // 2) Default sandbox firing — pulse fire-all a few times so the clock
+  //    emitter produces several tokenes
+  for (let i = 0; i < 6; i++) {
+    await fire();
+    await sleep(350);
+  }
+  await sleep(1500);
   await snap(page, "02-default-firing.png", "default sandbox firing");
 
-  // 3) Load Refinery preset, let it run 20s
-  await page.locator('button.q-tb:has-text("clear")').first().click();
-  await sleep(500);
-  // Load buttons are styled .q-tb--load
-  await page.locator('button.q-tb--load:has-text("refinery")').first().click();
-  console.log("Refinery loaded — running 20s ...");
+  // 3) Load Toolchain preset (shell `mise list`), fire, let it run 8s
+  await clear();
+  await sleep(400);
+  await load("toolchain");
+  await sleep(600);
+  await fire();
+  console.log("Toolchain firing — running 8s ...");
+  await sleep(8_000);
+  await snap(page, "03-toolchain-8s.png", "toolchain after 8s");
+
+  // 4) Load Refinery preset, fire, let it run 20s
+  await clear();
+  await sleep(400);
+  await load("refinery");
+  await sleep(600);
+  await fire();
+  console.log("Refinery firing — running 20s ...");
   await sleep(20_000);
-  await snap(page, "03-refinery-20s.png", "refinery after 20s");
+  await snap(page, "04-refinery-20s.png", "refinery after 20s");
 
   await browser.close();
 }

@@ -31,7 +31,7 @@ defmodule Quantok.World do
     environment: %{
       gravity: {0.0, 9.81},
       tick_rate: 30,
-      decay: %{enabled: false, rate: 1.0, shatter: :split}
+      decay: %{enabled: true, rate: 1.0, shatter: :split}
     },
     tick_count: 0,
     paused: false

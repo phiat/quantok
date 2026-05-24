@@ -129,7 +129,7 @@ screenshots-setup:
 
 # Capture demo screenshots (server must be running at localhost:4000)
 screenshots:
-    cd assets && node ../scripts/screenshots.mjs
+    cd assets && node screenshots.mjs
 
 # Clean build artifacts
 clean:

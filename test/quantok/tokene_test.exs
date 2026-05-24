@@ -90,7 +90,7 @@ defmodule Quantok.TokeneTest do
       tiny = Tokene.new("", :bit)
       {w, h} = Tokene.dimensions(tiny)
 
-      assert w >= 14.0
+      assert w >= 12.0
       assert h >= 12.0
     end
   end

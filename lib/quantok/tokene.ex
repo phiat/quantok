@@ -236,10 +236,14 @@ defmodule Quantok.Tokene do
   @doc """
   Derives display dimensions {width, height} from byte_size.
   """
+  # Approximate per-character pixel width matching the client's SDF font at
+  # height 12 — chosen so the box hugs the rendered text with minimal padding.
+  @char_px 5.5
+
   @spec dimensions(t()) :: {float(), float()}
   def dimensions(%__MODULE__{value: value}) do
     len = String.length(value || "")
-    w = max(len * 7.0, 14.0)
+    w = max(len * @char_px, 12.0)
     h = 12.0
     {w, h}
   end

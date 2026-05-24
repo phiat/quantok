@@ -146,6 +146,8 @@ const WorldCanvas = {
       nodeId: id,
       offsetX: world.x - group.position.x,
       offsetY: world.y - group.position.y,
+      startX: e.clientX,
+      startY: e.clientY,
     };
     this._dragMoved = false;
     this._hideMenu();
@@ -159,6 +161,14 @@ const WorldCanvas = {
     }
 
     if (this._drag) {
+      // Only treat as drag once cursor moves past a small threshold —
+      // otherwise a normal click registers as a drag and never selects.
+      const DRAG_THRESHOLD_PX = 4;
+      const dx = e.clientX - this._drag.startX;
+      const dy = e.clientY - this._drag.startY;
+      if (!this._dragMoved && dx * dx + dy * dy < DRAG_THRESHOLD_PX * DRAG_THRESHOLD_PX) {
+        return;
+      }
       this._dragMoved = true;
       const world = this.worldRenderer.screenToWorld(e.clientX, e.clientY);
       const nx = world.x - this._drag.offsetX;
@@ -387,8 +397,9 @@ const WorldCanvas = {
       const sensorRadius = node.config?.sensor_radius || 60;
       this.physics.spawnSensor(node.id, x, y, sensorRadius);
     } else if (node.type === "transformer") {
-      // Transformer: kinematic body + sensor zone for effect radius
-      this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2);
+      // Transformer: pass-through kinematic body + sensor zone for effect radius.
+      // Tokenes drift through the visual square; sensor triggers the effect.
+      this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2, { passthrough: true });
       const effectRadius = parseFloat(node.config?.radius) || 60;
       this.physics.spawnSensor(node.id, x, y, effectRadius);
     } else {

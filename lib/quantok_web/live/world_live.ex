@@ -51,7 +51,7 @@ defmodule QuantokWeb.WorldLive do
       |> assign(:node_count, 3)
       |> assign(:saved_worlds, list_saved_worlds())
       |> assign(:world_name, "Sandbox")
-      |> assign(:decay_enabled, false)
+      |> assign(:decay_enabled, true)
       |> assign(:decay_rate, 1.0)
       |> assign(:decay_shatter, :split)
       |> assign(:selected_node, nil)
@@ -60,6 +60,7 @@ defmodule QuantokWeb.WorldLive do
       |> push_node(floor)
       |> push_node(emitter)
       |> push_node(collector)
+      |> push_event("set_decay", %{enabled: true, rate: 1.0})
 
     # Start physics tick timer (~30 ticks/sec)
     # ms (~30Hz)
@@ -90,7 +91,7 @@ defmodule QuantokWeb.WorldLive do
         </button>
         <span :if={@decay_enabled} class="q-decay-group">
           <button
-            :for={r <- [{0.5, "½×"}, {1.0, "1×"}, {2.0, "2×"}, {4.0, "4×"}]}
+            :for={r <- [{0.5, "½×"}, {1.0, "1×"}, {2.0, "2×"}, {10.0, "10×"}]}
             phx-click="set_decay_rate"
             phx-value-rate={elem(r, 0)}
             class={"q-tb q-tb--sm" <> if(@decay_rate == elem(r, 0), do: " q-tb--active", else: "")}
@@ -649,15 +650,18 @@ defmodule QuantokWeb.WorldLive do
     {:ok, node_count} = Snapshot.load_into(socket.assigns.world_pid, snapshot)
     loaded_world = World.get_state(socket.assigns.world_pid)
     decay = Map.get(loaded_world.environment, :decay, %{})
+    enabled = Map.get(decay, :enabled, true)
+    rate = Map.get(decay, :rate, 1.0)
 
     socket
     |> push_event("clear_tokenes", %{})
     |> push_event("clear_nodes", %{})
+    |> push_event("set_decay", %{enabled: enabled, rate: rate})
     |> assign(:tokene_count, 0)
     |> assign(:node_count, node_count)
     |> assign(:world_name, snapshot["name"] || name)
-    |> assign(:decay_enabled, Map.get(decay, :enabled, false))
-    |> assign(:decay_rate, Map.get(decay, :rate, 1.0))
+    |> assign(:decay_enabled, enabled)
+    |> assign(:decay_rate, rate)
     |> assign(:decay_shatter, Map.get(decay, :shatter, :split))
     |> then(fn s ->
       Enum.reduce(Map.values(loaded_world.nodes), s, &push_node(&2, &1))

@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "name": "Toolchain",
+  "environment": {
+    "gravity": {"x": 0.0, "y": 9.81},
+    "tick_rate": 30,
+    "decay": {"enabled": false, "rate": 1.0, "shatter": "split"}
+  },
+  "nodes": [
+    {
+      "type": "emitter",
+      "label": "mise list",
+      "position": {"x": 0.0, "y": -320.0},
+      "config": {
+        "source": "Quantok.Node.Emitter.Shell",
+        "command": "mise list",
+        "chunker": "Quantok.Chunker.Word",
+        "emit_rate": 140,
+        "auto_repeat": true,
+        "repeat_interval": 6000
+      }
+    },
+    {
+      "type": "transformer",
+      "label": "heater",
+      "position": {"x": 0.0, "y": -160.0},
+      "config": {
+        "effect": "heater",
+        "radius": 90.0,
+        "strength": 0.5
+      }
+    },
+    {
+      "type": "passive",
+      "label": "funnel L",
+      "position": {"x": -160.0, "y": 20.0},
+      "config": {
+        "shape": "ramp",
+        "width": 220.0,
+        "height": 10.0,
+        "angle": 0.45,
+        "friction": 0.3,
+        "restitution": 0.2,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "funnel R",
+      "position": {"x": 160.0, "y": 20.0},
+      "config": {
+        "shape": "ramp",
+        "width": 220.0,
+        "height": 10.0,
+        "angle": -0.45,
+        "friction": 0.3,
+        "restitution": 0.2,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "collector",
+      "label": "upcase · emit",
+      "position": {"x": 0.0, "y": 160.0},
+      "config": {
+        "capacity": 6,
+        "trigger_mode": "on_full",
+        "tick_interval": 120,
+        "action": "Quantok.Node.Collector.Upcase",
+        "command": "echo",
+        "emit": true,
+        "output_chunker": "Quantok.Chunker.Rune",
+        "emit_rate": 80
+      }
+    },
+    {
+      "type": "passive",
+      "label": "conveyor →",
+      "position": {"x": -240.0, "y": 280.0},
+      "config": {
+        "shape": "conveyor",
+        "width": 320.0,
+        "height": 16.0,
+        "angle": 0.0,
+        "friction": 0.9,
+        "restitution": 0.05,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 120.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "conveyor ←",
+      "position": {"x": 240.0, "y": 280.0},
+      "config": {
+        "shape": "conveyor",
+        "width": 320.0,
+        "height": 16.0,
+        "angle": 0.0,
+        "friction": 0.9,
+        "restitution": 0.05,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": -120.0
+      }
+    },
+    {
+      "type": "collector",
+      "label": "count",
+      "position": {"x": 0.0, "y": 360.0},
+      "config": {
+        "capacity": 16,
+        "trigger_mode": "timed",
+        "tick_interval": 150,
+        "action": "Quantok.Node.Collector.Count",
+        "command": "echo",
+        "emit": false,
+        "emit_rate": 250
+      }
+    },
+    {
+      "type": "passive",
+      "label": "left wall",
+      "position": {"x": -540.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 600.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "right wall",
+      "position": {"x": 540.0, "y": 100.0},
+      "config": {
+        "shape": "wall",
+        "width": 10.0,
+        "height": 600.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    },
+    {
+      "type": "passive",
+      "label": "Floor",
+      "position": {"x": 0.0, "y": 420.0},
+      "config": {
+        "shape": "floor",
+        "width": 1200.0,
+        "height": 10.0,
+        "angle": 0.0,
+        "friction": 0.5,
+        "restitution": 0.3,
+        "strength": 1.0,
+        "radius": 100.0,
+        "speed": 0.0
+      }
+    }
+  ]
+}

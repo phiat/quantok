@@ -149,9 +149,11 @@ export class WorldRenderer {
     bgMesh.position.z = 0;
     group.add(bgMesh);
 
-    // SDF text
-    const displayText = value.length > 12 ? value.slice(0, 11) + "\u2026" : value;
-    const fontSize = Math.min(height * 0.7, width / (displayText.length * 0.62));
+    // SDF text \u2014 render the full value; the box is sized to fit it on the server.
+    const displayText = value;
+    const fontSize = displayText.length > 0
+      ? Math.min(height * 0.85, width / (displayText.length * 0.6))
+      : height * 0.7;
 
     const text = new Text();
     text.text = displayText;

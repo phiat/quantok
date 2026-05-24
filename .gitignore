@@ -55,3 +55,6 @@ AGENTS.md
 
 # Local tool version pins (per-user)
 mise.toml
+
+# Local scratch / debug artifacts
+.debug/
