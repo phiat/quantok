@@ -38,10 +38,10 @@ const WorldCanvas = {
     // Performance: cap tokenes alive at once. When exceeded, oldest are
     // evicted (FIFO by insertion order in tokeneData).
     this.maxTokenes = 500;
-    // FPS tracking
+    // FPS tracking — re-query the element each tick since LiveView morphdom
+    // can swap it out when the header re-renders.
     this._fpsFrames = 0;
     this._fpsLast = performance.now();
-    this._fpsEl = document.getElementById("q-fps");
 
     // Register event handlers BEFORE async init so mount-time push_events are captured
     this.handleEvent("emit_tokenes", (data) => this._dispatch("emit_tokenes", data));
@@ -546,9 +546,8 @@ const WorldCanvas = {
     const fpsDt = now - this._fpsLast;
     if (fpsDt >= 500) {
       const fps = Math.round((this._fpsFrames * 1000) / fpsDt);
-      if (this._fpsEl) {
-        this._fpsEl.textContent = `${fps} fps · ${this.tokeneData.size} tok`;
-      }
+      const el = document.getElementById("q-fps");
+      if (el) el.textContent = `${fps} fps · ${this.tokeneData.size} tok`;
       this._fpsFrames = 0;
       this._fpsLast = now;
     }
