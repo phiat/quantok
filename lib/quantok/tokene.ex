@@ -183,8 +183,11 @@ defmodule Quantok.Tokene do
   end
 
   defp fossilize(tokene) do
-    %{tokene | decay: %{enabled: false, half_life: :infinite, shatter: :fossilize},
-               integrity: max(current_integrity(tokene), 0.05)}
+    %{
+      tokene
+      | decay: %{enabled: false, half_life: :infinite, shatter: :fossilize},
+        integrity: max(current_integrity(tokene), 0.05)
+    }
   end
 
   defp chunker_for_encoding(:sentence), do: Quantok.Chunker.Sentence

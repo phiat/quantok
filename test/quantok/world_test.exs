@@ -203,9 +203,13 @@ defmodule Quantok.WorldTest do
       actual_state = World.get_state(w)
 
       rebuilt =
-        Enum.reduce(events, %Quantok.World{id: actual_state.id, name: actual_state.name}, fn event, acc ->
-          Event.apply(acc, event)
-        end)
+        Enum.reduce(
+          events,
+          %Quantok.World{id: actual_state.id, name: actual_state.name},
+          fn event, acc ->
+            Event.apply(acc, event)
+          end
+        )
 
       assert map_size(rebuilt.nodes) == map_size(actual_state.nodes)
       assert map_size(rebuilt.tokenes) == map_size(actual_state.tokenes)
@@ -257,13 +261,15 @@ defmodule Quantok.WorldTest do
 
   describe "collector emit" do
     test "trigger with emit creates new tokenes in world", %{world: w} do
-      collector = Collector.new(
-        capacity: 8,
-        trigger_mode: :manual,
-        action: Quantok.Node.Collector.Reverse,
-        emit: true,
-        output_chunker: Quantok.Chunker.Byte
-      )
+      collector =
+        Collector.new(
+          capacity: 8,
+          trigger_mode: :manual,
+          action: Quantok.Node.Collector.Reverse,
+          emit: true,
+          output_chunker: Quantok.Chunker.Byte
+        )
+
       {:ok, _} = World.add_node(w, collector)
       fill_collector(w, collector.id, "abc", chunker: Quantok.Chunker.Word)
 
@@ -276,13 +282,15 @@ defmodule Quantok.WorldTest do
     end
 
     test "emitted tokenes have collector as source_id", %{world: w} do
-      collector = Collector.new(
-        capacity: 8,
-        trigger_mode: :manual,
-        action: Quantok.Node.Collector.Echo,
-        emit: true,
-        output_chunker: Quantok.Chunker.Byte
-      )
+      collector =
+        Collector.new(
+          capacity: 8,
+          trigger_mode: :manual,
+          action: Quantok.Node.Collector.Echo,
+          emit: true,
+          output_chunker: Quantok.Chunker.Byte
+        )
+
       {:ok, _} = World.add_node(w, collector)
       fill_collector(w, collector.id, "hi", chunker: Quantok.Chunker.Word)
 
@@ -297,14 +305,16 @@ defmodule Quantok.WorldTest do
       state = World.get_state(w)
       Phoenix.PubSub.subscribe(Quantok.PubSub, "world:#{state.id}")
 
-      collector = Collector.new(
-        capacity: 8,
-        trigger_mode: :manual,
-        action: Quantok.Node.Collector.Echo,
-        emit: true,
-        output_chunker: Quantok.Chunker.Word,
-        emit_rate: 500
-      )
+      collector =
+        Collector.new(
+          capacity: 8,
+          trigger_mode: :manual,
+          action: Quantok.Node.Collector.Echo,
+          emit: true,
+          output_chunker: Quantok.Chunker.Word,
+          emit_rate: 500
+        )
+
       {:ok, _} = World.add_node(w, collector)
       assert_receive {:node_added, _}
 
@@ -316,13 +326,15 @@ defmodule Quantok.WorldTest do
     end
 
     test "collector rejects absorbing its own emitted tokenes", %{world: w} do
-      collector = Collector.new(
-        capacity: 2,
-        trigger_mode: :on_full,
-        emit: true,
-        output_chunker: Quantok.Chunker.Byte,
-        action: Quantok.Node.Collector.Echo
-      )
+      collector =
+        Collector.new(
+          capacity: 2,
+          trigger_mode: :on_full,
+          emit: true,
+          output_chunker: Quantok.Chunker.Byte,
+          action: Quantok.Node.Collector.Echo
+        )
+
       {:ok, _} = World.add_node(w, collector)
       fill_collector(w, collector.id, "ab", chunker: Quantok.Chunker.Byte)
 
@@ -340,11 +352,13 @@ defmodule Quantok.WorldTest do
     end
 
     test "non-emit collector does not create tokenes", %{world: w} do
-      collector = Collector.new(
-        capacity: 8,
-        trigger_mode: :manual,
-        emit: false
-      )
+      collector =
+        Collector.new(
+          capacity: 8,
+          trigger_mode: :manual,
+          emit: false
+        )
+
       {:ok, _} = World.add_node(w, collector)
       fill_collector(w, collector.id, "hello", chunker: Quantok.Chunker.Word)
 
@@ -394,6 +408,7 @@ defmodule Quantok.WorldTest do
       for _ <- 1..300 do
         World.tick(w)
       end
+
       sync(w)
 
       events_after = World.get_events(w)

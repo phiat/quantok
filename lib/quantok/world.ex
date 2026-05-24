@@ -339,7 +339,13 @@ defmodule Quantok.World do
 
   # --- Private ---
 
-  defp maybe_auto_trigger(world, events, :full, %{config: %{trigger_mode: :on_full}}, collector_id) do
+  defp maybe_auto_trigger(
+         world,
+         events,
+         :full,
+         %{config: %{trigger_mode: :on_full}},
+         collector_id
+       ) do
     case Map.get(world.nodes, collector_id) do
       %Node{type: :collector} = collector ->
         {world, events, _output} = do_trigger(world, events, collector_id, collector)

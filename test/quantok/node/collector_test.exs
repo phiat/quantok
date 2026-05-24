@@ -136,11 +136,13 @@ defmodule Quantok.Node.CollectorTest do
 
   describe "trigger/1 with emit" do
     test "returns tokenes when emit is true with chunker" do
-      node = Collector.new(
-        emit: true,
-        output_chunker: Quantok.Chunker.Word,
-        action: Quantok.Node.Collector.Echo
-      )
+      node =
+        Collector.new(
+          emit: true,
+          output_chunker: Quantok.Chunker.Word,
+          action: Quantok.Node.Collector.Echo
+        )
+
       {:ok, node} = Collector.absorb(node, Tokene.new("hello world", :word))
       {:ok, output, cleared, tokenes} = Collector.trigger(node)
 

@@ -346,7 +346,10 @@ defmodule Quantok.World.Snapshot do
 
   defp safe_collector_command(action, command) do
     cmd = command || "echo"
-    if action == Quantok.Node.Collector.Shell and cmd not in @allowed_collector_commands, do: "echo", else: cmd
+
+    if action == Quantok.Node.Collector.Shell and cmd not in @allowed_collector_commands,
+      do: "echo",
+      else: cmd
   end
 
   defp safe_optional_module(nil, _type), do: nil
@@ -354,7 +357,11 @@ defmodule Quantok.World.Snapshot do
 
   defp module_to_string(mod), do: to_string(mod) |> String.replace_leading("Elixir.", "")
 
-  defp string_to_module(str, :emitter_source), do: Map.get(@source_modules, str, Quantok.Node.Emitter.Shell)
+  defp string_to_module(str, :emitter_source),
+    do: Map.get(@source_modules, str, Quantok.Node.Emitter.Shell)
+
   defp string_to_module(str, :chunker), do: Map.get(@chunker_modules, str, Quantok.Chunker.Word)
-  defp string_to_module(str, :collector_action), do: Map.get(@action_modules, str, Quantok.Node.Collector.Echo)
+
+  defp string_to_module(str, :collector_action),
+    do: Map.get(@action_modules, str, Quantok.Node.Collector.Echo)
 end

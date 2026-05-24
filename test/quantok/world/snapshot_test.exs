@@ -152,12 +152,13 @@ defmodule Quantok.World.SnapshotTest do
   end
 
   test "snapshot preserves emit config", %{pid: pid} do
-    collector = Collector.new(
-      emit: true,
-      output_chunker: Quantok.Chunker.Word,
-      emit_rate: 500,
-      label: "emit collector"
-    )
+    collector =
+      Collector.new(
+        emit: true,
+        output_chunker: Quantok.Chunker.Word,
+        emit_rate: 500,
+        label: "emit collector"
+      )
 
     World.add_node(pid, collector)
 
