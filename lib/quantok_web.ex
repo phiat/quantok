@@ -84,8 +84,6 @@ defmodule QuantokWeb do
 
       # HTML escaping functionality
       import Phoenix.HTML
-      # Core UI components
-      import QuantokWeb.CoreComponents
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

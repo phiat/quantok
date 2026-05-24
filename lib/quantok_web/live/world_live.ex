@@ -74,7 +74,7 @@ defmodule QuantokWeb.WorldLive do
   @impl true
   def render(assigns) do
     ~H"""
-    <div class="flex flex-col h-screen w-screen overflow-hidden">
+    <div class="q-root">
       <header class="q-topbar">
         <span class="q-logo">Quantok</span>
         <span class="q-sep"></span>
@@ -125,13 +125,13 @@ defmodule QuantokWeb.WorldLive do
         </span>
       </header>
 
-      <div class="flex flex-1 overflow-hidden">
+      <div class="q-main">
         <WorldSidebar.sidebar />
 
         <WorldConfig.config_panel selected_node={@selected_node} template_node={@template_node} />
 
         <div class="q-canvas-wrap">
-          <canvas id="world-canvas" phx-hook="WorldCanvas" class="w-full h-full" phx-update="ignore">
+          <canvas id="world-canvas" phx-hook="WorldCanvas" class="q-canvas" phx-update="ignore">
           </canvas>
         </div>
       </div>

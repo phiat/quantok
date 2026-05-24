@@ -22,8 +22,7 @@ config :quantok, QuantokWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "WpF2Aq9saH6TVlAyf9BG9vVIfrkC5p2CLBwiz8RkXVTezs46VKyKCwPBJfHuKv30",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:quantok, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:quantok, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:quantok, ~w(--sourcemap=inline --watch)]}
   ]
 
 # ## SSL Support

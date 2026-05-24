@@ -105,10 +105,9 @@ fmt-check:
 build:
     mix compile
 
-# Build frontend assets
+# Build frontend assets (esbuild bundles both JS and CSS)
 assets:
     mix esbuild quantok
-    mix tailwind quantok
 
 # Pre-release pipeline: format-check, lint, test, warnings-as-errors, prod asset build
 release-check:

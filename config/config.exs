@@ -23,25 +23,15 @@ config :quantok, QuantokWeb.Endpoint,
   pubsub_server: Quantok.PubSub,
   live_view: [signing_salt: "NcB/mbJF"]
 
-# Configure esbuild (the version is required)
+# Configure esbuild (the version is required). Bundles both JS and CSS:
+# outputs land at priv/static/assets/js/app.js and priv/static/assets/css/app.css.
 config :esbuild,
   version: "0.25.4",
   quantok: [
     args:
-      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
+      ~w(js/app.js css/app.css --bundle --target=es2022 --outdir=../priv/static/assets --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
-  ]
-
-# Configure tailwind (the version is required)
-config :tailwind,
-  version: "4.1.12",
-  quantok: [
-    args: ~w(
-      --input=assets/css/app.css
-      --output=priv/static/assets/css/app.css
-    ),
-    cd: Path.expand("..", __DIR__)
   ]
 
 # Configure Elixir's Logger
