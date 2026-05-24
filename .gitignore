@@ -56,3 +56,10 @@ npm-debug.log
 
 # Agent instructions (local)
 AGENTS.md
+
+# Local tool version pins (per-user)
+mise.toml
+
+# Tiktokenex extracted to its own repo; local dir still satisfies the
+# path dep in mix.exs until that's repointed. Not tracked here.
+/tiktokenex/
