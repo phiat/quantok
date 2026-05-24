@@ -79,8 +79,9 @@ defmodule Quantok.Node.CollectorTest do
   end
 
   describe "tick/1" do
-    test "increments ticks_since_trigger for timed collectors" do
+    test "increments ticks_since_trigger while buffer non-empty" do
       node = Collector.new(trigger_mode: :timed, tick_interval: 5)
+      {:ok, node} = Collector.absorb(node, Tokene.new("a", :byte))
       {:ok, node} = Collector.tick(node)
       assert node.config.ticks_since_trigger == 1
     end
@@ -93,10 +94,37 @@ defmodule Quantok.Node.CollectorTest do
       assert node.config.ticks_since_trigger == 2
     end
 
-    test "does not trigger when buffer empty even at threshold" do
+    test "does not trigger or accumulate ticks while buffer empty" do
       node = Collector.new(trigger_mode: :timed, tick_interval: 1)
       {:ok, node} = Collector.tick(node)
-      assert node.config.ticks_since_trigger == 1
+      assert node.config.ticks_since_trigger == 0
+    end
+
+    test "first absorbed tokene waits a full tick_interval before firing" do
+      # Regression: previously, ticks accumulated while idle and the first
+      # absorbed tokene would fire on the very next tick. Now the counter
+      # only runs while the buffer has data.
+      node = Collector.new(trigger_mode: :timed, tick_interval: 5)
+
+      # Long idle period: should not pre-charge the counter.
+      node =
+        Enum.reduce(1..50, node, fn _, n ->
+          {:ok, n} = Collector.tick(n)
+          n
+        end)
+
+      assert node.config.ticks_since_trigger == 0
+
+      # Now a tokene arrives. Must take exactly tick_interval ticks to fire.
+      {:ok, node} = Collector.absorb(node, Tokene.new("x", :byte))
+
+      node =
+        Enum.reduce(1..4, node, fn _, n ->
+          assert {:ok, n} = Collector.tick(n)
+          n
+        end)
+
+      assert {:trigger, _} = Collector.tick(node)
     end
 
     test "non-timed collectors just return :ok" do

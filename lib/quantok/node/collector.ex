@@ -118,12 +118,21 @@ defmodule Quantok.Node.Collector do
   Advance the tick counter. Returns `{:trigger, updated_node}` if a timed
   trigger is due (buffer non-empty and tick threshold reached), otherwise
   `{:ok, updated_node}`.
+
+  The counter only advances while the buffer is non-empty: the interval is
+  "time since data first arrived," not a free-running heartbeat. Without this,
+  a long idle period would pre-charge the counter and cause the first absorbed
+  tokene to trigger almost immediately.
   """
   @spec tick(Node.t()) :: {:ok, Node.t()} | {:trigger, Node.t()}
+  def tick(%Node{type: :collector, config: %{trigger_mode: :timed, buffer: []}} = node) do
+    {:ok, node}
+  end
+
   def tick(%Node{type: :collector, config: %{trigger_mode: :timed} = config} = node) do
     ticks = config.ticks_since_trigger + 1
 
-    if ticks >= config.tick_interval and config.buffer != [] do
+    if ticks >= config.tick_interval do
       {:trigger, %{node | config: %{config | ticks_since_trigger: ticks}}}
     else
       {:ok, %{node | config: %{config | ticks_since_trigger: ticks}}}
