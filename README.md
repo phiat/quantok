@@ -38,10 +38,10 @@ Emitter (clock, %H:%M:%S)
 Collector (8 slots) -> triggers action when full
 ```
 
-- **Emitters** execute a source (clock, sequence, manual text, random bytes, shell) and chunk the output
-- **Collectors** absorb tokenes into a buffer, trigger an action (echo, reverse, upcase, count, hash, shell). Trigger modes: on-full, manual, or timed (physics-tick interval). Output modes: discard or emit (re-chunk output as new tokenes)
-- **Transformers** modify tokenes by proximity — split, crush, heat, cool, filter, duplicate, paint
-- **Passives** are static geometry — floors, walls, ramps, funnels, conveyors (apply lateral surface velocity)
+- **Emitters** execute a source (clock, sequence, manual text, random bytes, emoji, shell) and chunk the output
+- **Collectors** absorb tokenes into a buffer, trigger an action (echo, reverse, upcase, count, hash, shell, sum, min, max). Trigger modes: on-full, manual, or timed (physics-tick interval). Output modes: discard or emit (re-chunk output as new tokenes)
+- **Transformers** modify tokenes by proximity — split, crush, heat, cool, duplicate, **tiktoken** (encode any tokene into BPE token-IDs via the [tiktokenex](https://github.com/phiat/tiktokenex) library)
+- **Passives** are static geometry — floors, walls, ramps, funnels, conveyors (apply lateral surface velocity), **portals** (paired teleporters; tokenes entering one exit at any other portal on the same channel)
 
 **Sidebar** (left): each row is a split button — click the **body** to preview the node-type in the config panel (right) before adding, or click **+** to drop it into the world immediately with defaults. Either way, the new node briefly highlights so you can spot it. Click any existing node on the canvas to load its config; click **×** in the config header to dismiss.
 
