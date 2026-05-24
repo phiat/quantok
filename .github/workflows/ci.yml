@@ -15,15 +15,7 @@ jobs:
           - elixir: '1.19'
             otp: '28'
     steps:
-      - name: Checkout Quantok
-        uses: actions/checkout@v4
-        with:
-          path: quantok
-
-      # Quantok depends on tiktokenex via {:tiktokenex, path: "../tiktokenex"}.
-      # Clone the public sibling so the path dep resolves.
-      - name: Clone tiktokenex sibling
-        run: git clone --depth=1 https://github.com/phiat/tiktokenex.git tiktokenex
+      - uses: actions/checkout@v4
 
       - uses: erlef/setup-beam@v1
         with:
@@ -34,48 +26,30 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            quantok/deps
-            quantok/_build
-            tiktokenex/deps
-            tiktokenex/_build
-          key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('quantok/mix.lock', 'tiktokenex/mix.lock') }}
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
+
+      - run: mix deps.get
 
       - name: Cache BPE rank files
         id: ranks-cache
         uses: actions/cache@v4
         with:
-          path: tiktokenex/priv/ranks
+          path: _build/test/lib/tiktokenex/priv/ranks
           key: tiktoken-ranks-cl100k-o200k
 
       - name: Download BPE rank files
         if: steps.ranks-cache.outputs.cache-hit != 'true'
         run: |
-          mkdir -p tiktokenex/priv/ranks
-          curl -sSL "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken" -o tiktokenex/priv/ranks/cl100k_base.tiktoken
-          curl -sSL "https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken" -o tiktokenex/priv/ranks/o200k_base.tiktoken
+          dir="_build/test/lib/tiktokenex/priv/ranks"
+          mkdir -p "$dir"
+          curl -fsSL "https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken" -o "$dir/cl100k_base.tiktoken"
+          curl -fsSL "https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken" -o "$dir/o200k_base.tiktoken"
 
-      - name: Fetch tiktokenex deps
-        working-directory: tiktokenex
-        run: mix deps.get
-
-      - name: Fetch Quantok deps
-        working-directory: quantok
-        run: mix deps.get
-
-      - name: Format check
-        working-directory: quantok
-        run: mix format --check-formatted
-
-      - name: Credo
-        working-directory: quantok
-        run: mix credo --strict
-
-      - name: Compile (warnings as errors)
-        working-directory: quantok
-        run: mix compile --warnings-as-errors
-
-      - name: Test
-        working-directory: quantok
-        run: mix test
+      - run: mix format --check-formatted
+      - run: mix credo --strict
+      - run: mix compile --warnings-as-errors
+      - run: mix test

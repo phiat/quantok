@@ -6,12 +6,28 @@ default:
 
 # --- Setup ---
 
-# Install all dependencies (elixir + npm)
-# Requires sibling ../tiktokenex repo to be cloned and set up first
+# Install all dependencies (elixir + npm), then fetch BPE rank files
 setup:
     mix deps.get
     cd assets && npm install
     mix ecto.create
+    just download-ranks
+
+# Download BPE rank files into the installed tiktokenex priv dir (one per Mix env)
+# Hex packages exclude priv/ranks to keep download size small, so we fetch on demand.
+download-ranks env='dev':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    dir="_build/{{env}}/lib/tiktokenex/priv/ranks"
+    mkdir -p "$dir"
+    for name in cl100k_base o200k_base; do
+      f="$dir/$name.tiktoken"
+      if [ ! -f "$f" ]; then
+        echo "Fetching $name.tiktoken"
+        curl -fsSL "https://openaipublic.blob.core.windows.net/encodings/$name.tiktoken" -o "$f"
+      fi
+    done
+    echo "Ranks ready in $dir"
 
 # Create and migrate database
 db:

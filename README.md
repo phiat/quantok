@@ -1,19 +1,16 @@
 # Quantok
 
+[![CI](https://github.com/phiat/quantok/actions/workflows/ci.yml/badge.svg)](https://github.com/phiat/quantok/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A physics sandbox where data chunks are physical objects.
 
 Emitters produce **tokenes** from commands and data. Tokenes fall through a 2D world affected by gravity, collide with surfaces, pass through transformers, and land in collectors that trigger actions. The chunking granularity — bits, bytes, runes, BPE tokens, words, phrases, sentences — determines a tokene's mass, size, and physical behavior.
 
 ## Quick Start
 
-Quantok depends on a sibling [tiktokenex](https://github.com/phiat/tiktokenex) repo for BPE tokenization. Clone it next to this repo first:
-
 ```bash
-git clone https://github.com/phiat/tiktokenex.git ../tiktokenex
-cd ../tiktokenex && just setup   # fetch deps, download BPE ranks
-cd -                             # back to quantok
-
-just setup   # install deps, create db
+just setup   # install deps, create db, download BPE rank files
 just run     # start Phoenix server with IEx
 ```
 
