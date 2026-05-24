@@ -110,6 +110,18 @@ assets:
     mix esbuild quantok
     mix tailwind quantok
 
+# Pre-release pipeline: format-check, lint, test, warnings-as-errors, prod asset build
+release-check:
+    mix format --check-formatted
+    mix credo --strict
+    mix test
+    mix compile --warnings-as-errors
+    mix assets.deploy
+
+# Run the production server (MIX_ENV=prod with digested assets)
+prod-run:
+    MIX_ENV=prod mix phx.server
+
 # Clean build artifacts
 clean:
     mix clean
