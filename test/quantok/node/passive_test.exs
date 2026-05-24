@@ -28,7 +28,26 @@ defmodule Quantok.Node.PassiveTest do
     assert Passive.solid?(Passive.new(:wall))
     assert Passive.solid?(Passive.new(:ramp))
     assert Passive.solid?(Passive.new(:funnel))
+    assert Passive.solid?(Passive.new(:conveyor))
     refute Passive.solid?(Passive.new(:attractor))
     refute Passive.solid?(Passive.new(:repeller))
+  end
+
+  test "creates a conveyor with surface speed and grippy friction" do
+    node = Passive.new(:conveyor)
+    assert node.config.shape == :conveyor
+    assert node.config.speed == 80.0
+    assert node.config.friction == 0.9
+    assert node.label == "Conveyor"
+  end
+
+  test "conveyor speed is overridable (signed for direction)" do
+    node = Passive.new(:conveyor, speed: -160.0)
+    assert node.config.speed == -160.0
+  end
+
+  test "conveyor?/1" do
+    assert Passive.conveyor?(Passive.new(:conveyor))
+    refute Passive.conveyor?(Passive.new(:floor))
   end
 end

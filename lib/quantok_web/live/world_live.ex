@@ -202,6 +202,20 @@ defmodule QuantokWeb.WorldLive do
             }
             add_event="add_source_emitter"
           />
+          <.menu_item
+            kind="source_emitter"
+            label="random alnum · byte"
+            variant="emit"
+            params={%{"source" => "random", "command" => "alnum:32", "chunker" => "byte"}}
+            add_event="add_source_emitter"
+          />
+          <.menu_item
+            kind="source_emitter"
+            label="random hex · byte"
+            variant="emit"
+            params={%{"source" => "random", "command" => "hex:32", "chunker" => "byte"}}
+            add_event="add_source_emitter"
+          />
 
           <div class="q-section">Collectors</div>
           <.menu_item
@@ -267,6 +281,13 @@ defmodule QuantokWeb.WorldLive do
             params={%{"action" => "echo", "capacity" => "4", "chunker" => "byte"}}
             add_event="add_emit_collector"
           />
+          <.menu_item
+            kind="emit_collector"
+            label="sha256 · emit"
+            variant="collect"
+            params={%{"action" => "hash", "capacity" => "8", "chunker" => "word"}}
+            add_event="add_emit_collector"
+          />
 
           <div class="q-section">Transformers</div>
           <.menu_item
@@ -325,6 +346,20 @@ defmodule QuantokWeb.WorldLive do
             label="funnel"
             variant="passive"
             params={%{"shape" => "funnel"}}
+            add_event="add_passive"
+          />
+          <.menu_item
+            kind="passive"
+            label="conveyor →"
+            variant="passive"
+            params={%{"shape" => "conveyor", "speed" => "80"}}
+            add_event="add_passive"
+          />
+          <.menu_item
+            kind="passive"
+            label="conveyor ←"
+            variant="passive"
+            params={%{"shape" => "conveyor", "speed" => "-80"}}
             add_event="add_passive"
           />
         </nav>
@@ -520,14 +555,14 @@ defmodule QuantokWeb.WorldLive do
     end
   end
 
-  def handle_event("add_passive", %{"shape" => shape}, socket) do
+  def handle_event("add_passive", %{"shape" => shape} = params, socket) do
     case shape_atom(shape) do
       nil ->
         {:noreply, socket}
 
       shape_atom ->
         {x, socket} = next_x(socket)
-        passive = Passive.new(shape_atom, position: {x, 100.0})
+        passive = Passive.new(shape_atom, passive_opts(shape_atom, params, x))
         {:ok, _} = World.add_node(socket.assigns.world_pid, passive)
         {:noreply, socket |> push_node(passive) |> update(:node_count, &(&1 + 1))}
     end
@@ -939,7 +974,7 @@ defmodule QuantokWeb.WorldLive do
       <label class="q-cfg-label">action</label>
       <div class="q-cfg-btns">
         <button
-          :for={a <- ~w(echo reverse upcase count)}
+          :for={a <- ~w(echo reverse upcase count hash)}
           phx-click="update_node_config"
           phx-value-field="action"
           phx-value-val={a}
@@ -1042,7 +1077,7 @@ defmodule QuantokWeb.WorldLive do
       <label class="q-cfg-label">shape</label>
       <div class="q-cfg-btns">
         <button
-          :for={s <- ~w(floor wall ramp funnel)}
+          :for={s <- ~w(floor wall ramp funnel conveyor)}
           phx-click="update_node_config"
           phx-value-field="shape"
           phx-value-val={s}
@@ -1063,6 +1098,21 @@ defmodule QuantokWeb.WorldLive do
         >
           {w}
         </button>
+      </div>
+
+      <div :if={@config.shape == :conveyor}>
+        <label class="q-cfg-label">speed</label>
+        <div class="q-cfg-btns">
+          <button
+            :for={s <- [-160, -80, -40, 40, 80, 160]}
+            phx-click="update_node_config"
+            phx-value-field="speed"
+            phx-value-val={s}
+            class={"q-cfg-btn" <> if(round(@config.speed) == s, do: " q-cfg-btn--active", else: "")}
+          >
+            {s}
+          </button>
+        </div>
       </div>
     </div>
     """
@@ -1095,6 +1145,7 @@ defmodule QuantokWeb.WorldLive do
     case params["field"] do
       "shape" -> %{config | shape: shape_atom(params["val"]) || config.shape}
       "width" -> %{config | width: parse_float(params["val"], config.width)}
+      "speed" -> %{config | speed: parse_float(params["val"], config.speed)}
       _ -> config
     end
   end
@@ -1240,7 +1291,8 @@ defmodule QuantokWeb.WorldLive do
       :sensor_radius,
       :trigger_mode,
       :emit,
-      :tick_interval
+      :tick_interval,
+      :speed
     ])
     |> Map.new(fn {k, v} -> {to_string(k), serialize_value(v)} end)
   end
@@ -1324,14 +1376,21 @@ defmodule QuantokWeb.WorldLive do
     end
   end
 
-  defp build_template("passive", %{"shape" => shape}) do
+  defp build_template("passive", %{"shape" => shape} = params) do
     case shape_atom(shape) do
       nil -> nil
-      atom -> Passive.new(atom, position: {0.0, 100.0})
+      atom -> Passive.new(atom, passive_opts(atom, params, 0.0))
     end
   end
 
   defp build_template(_, _), do: nil
+
+  defp passive_opts(:conveyor, params, x) do
+    speed = parse_float(params["speed"] || "80", 80.0)
+    [position: {x, 100.0}, speed: speed]
+  end
+
+  defp passive_opts(_shape, _params, x), do: [position: {x, 100.0}]
 
   defp effect_atom("splitter"), do: :splitter
   defp effect_atom("crusher"), do: :crusher
@@ -1348,12 +1407,14 @@ defmodule QuantokWeb.WorldLive do
   defp shape_atom("funnel"), do: :funnel
   defp shape_atom("attractor"), do: :attractor
   defp shape_atom("repeller"), do: :repeller
+  defp shape_atom("conveyor"), do: :conveyor
   defp shape_atom(_), do: nil
 
   defp source_module("clock"), do: Quantok.Node.Emitter.Clock
   defp source_module("file"), do: Quantok.Node.Emitter.File
   defp source_module("manual"), do: Quantok.Node.Emitter.Manual
   defp source_module("sequence"), do: Quantok.Node.Emitter.Sequence
+  defp source_module("random"), do: Quantok.Node.Emitter.Random
   defp source_module(_), do: nil
 
   defp collector_action("echo"), do: Quantok.Node.Collector.Echo
@@ -1362,6 +1423,7 @@ defmodule QuantokWeb.WorldLive do
   defp collector_action("upcase"), do: Quantok.Node.Collector.Upcase
   defp collector_action("count"), do: Quantok.Node.Collector.Count
   defp collector_action("display"), do: Quantok.Node.Collector.Display
+  defp collector_action("hash"), do: Quantok.Node.Collector.Hash
   defp collector_action(_), do: Quantok.Node.Collector.Echo
 
   defp shatter_atom("split"), do: :split

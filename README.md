@@ -32,10 +32,10 @@ Emitter (runs "date")
 Collector (8 slots) -> triggers action when full
 ```
 
-- **Emitters** execute a source (shell command, clock, sequence, manual text) and chunk the output
-- **Collectors** absorb tokenes into a buffer, trigger an action (echo, reverse, upcase, count, shell). Trigger modes: on-full, manual, or timed (physics-tick interval). Output modes: discard or emit (re-chunk output as new tokenes)
+- **Emitters** execute a source (shell command, clock, sequence, manual text, random bytes) and chunk the output
+- **Collectors** absorb tokenes into a buffer, trigger an action (echo, reverse, upcase, count, hash, shell). Trigger modes: on-full, manual, or timed (physics-tick interval). Output modes: discard or emit (re-chunk output as new tokenes)
 - **Transformers** modify tokenes by proximity — split, crush, heat, cool, filter, duplicate, paint
-- **Passives** are static geometry — floors, walls, ramps, funnels
+- **Passives** are static geometry — floors, walls, ramps, funnels, conveyors (apply lateral surface velocity)
 
 Nodes are draggable. Hover over a node for contextual actions (fire, trigger, clear, rotate, delete). Scroll to zoom, shift+drag to pan.
 

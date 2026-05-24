@@ -290,6 +290,34 @@ export class WorldRenderer {
       group.rotation.z = -config.angle;
     }
 
+    // Conveyor: tint + direction chevrons
+    if (nodeType === "passive" && config.shape === "conveyor") {
+      bodyMat.color.setHex(0xadb6c4);
+      bodyMat.opacity = 0.95;
+      const speed = parseFloat(config.speed) || 0;
+      const dir = speed >= 0 ? 1 : -1;
+      const chevronCount = Math.max(2, Math.floor(width / 40));
+      const spacing = width / chevronCount;
+      const chevronMat = new THREE.MeshBasicMaterial({
+        color: 0x001b2e,
+        transparent: true,
+        opacity: 0.75,
+      });
+      for (let i = 0; i < chevronCount; i++) {
+        const cx = -width / 2 + spacing / 2 + i * spacing;
+        const tri = new THREE.Shape();
+        const s = Math.min(height * 0.45, 5);
+        tri.moveTo(-s * dir, -s);
+        tri.lineTo(s * dir, 0);
+        tri.lineTo(-s * dir, s);
+        tri.closePath();
+        const geo = new THREE.ShapeGeometry(tri);
+        const mesh = new THREE.Mesh(geo, chevronMat);
+        mesh.position.set(cx, 0, 0.2);
+        group.add(mesh);
+      }
+    }
+
     group.userData = { id, nodeType };
     this.scene.add(group);
     this.nodeMeshes.set(id, group);

@@ -11,6 +11,7 @@ const WorldCanvas = {
   async mounted() {
     this.tokeneData = new Map();
     this.nodeData = new Map();
+    this.conveyors = new Map(); // id -> { x, y, hw, hh, angle, speed }
     this.sensorCooldown = new Map();
     this._pendingShatter = new Set();
     this._pendingTimeouts = [];
@@ -365,6 +366,15 @@ const WorldCanvas = {
         node.config?.friction || 0.5,
         node.config?.restitution || 0.3
       );
+      if (node.config?.shape === "conveyor") {
+        this.conveyors.set(node.id, {
+          x, y,
+          hw: w / 2,
+          hh: h / 2,
+          angle: parseFloat(node.config?.angle) || 0,
+          speed: parseFloat(node.config?.speed) || 0,
+        });
+      }
     } else if (node.type === "collector") {
       // Kinematic body + sensor zone
       this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2);
@@ -386,6 +396,7 @@ const WorldCanvas = {
     this.physics.remove(node_id);
     this.worldRenderer.removeNode(node_id);
     this.nodeData.delete(node_id);
+    this.conveyors.delete(node_id);
     this.sensorCooldown.delete(node_id);
   },
 
@@ -407,6 +418,7 @@ const WorldCanvas = {
       this.worldRenderer.removeNode(id);
     }
     this.nodeData.clear();
+    this.conveyors.clear();
     this.sensorCooldown.clear();
   },
 
@@ -453,10 +465,52 @@ const WorldCanvas = {
     // Check sensor intersections (collectors + transformers)
     this.checkSensorIntersections();
 
+    // Apply conveyor surface velocity to tokenes resting on conveyors
+    this.applyConveyorForces();
+
     // Render
     this.worldRenderer.render();
 
     this._rafId = requestAnimationFrame(() => this.animate());
+  },
+
+  applyConveyorForces() {
+    if (this.conveyors.size === 0) return;
+    // Coupling factor: how aggressively to drag tokenes toward target tangent speed.
+    // 0 = no drag, 1 = snap to target instantly. ~0.15 feels like sticky tape.
+    const k = 0.15;
+    // How far above the top surface (in conveyor-local Y) a tokene can be and still get dragged.
+    const contactBand = 4;
+
+    for (const [, conv] of this.conveyors) {
+      const cos = Math.cos(conv.angle);
+      const sin = Math.sin(conv.angle);
+      const tx = cos, ty = sin;
+
+      for (const [tid, tdata] of this.tokeneData) {
+        const xform = this.physics.getTransform(tid);
+        if (!xform) continue;
+        const dx = xform.x - conv.x;
+        const dy = xform.y - conv.y;
+        // project to conveyor's local frame: localX = along surface, localY = perpendicular
+        const localX = dx * cos + dy * sin;
+        const localY = -dx * sin + dy * cos;
+        // tokene half-extents
+        const thx = (tdata.width || 16) / 2;
+        const thy = (tdata.height || 16) / 2;
+        // Must be over the surface horizontally, and just above it (Rapier Y-down: above = localY < 0)
+        if (Math.abs(localX) > conv.hw + thx) continue;
+        if (localY > -conv.hh + 1) continue; // not above
+        if (localY < -conv.hh - thy - contactBand) continue; // too far above
+        const body = this.physics.getBody(tid);
+        if (!body) continue;
+        const v = body.linvel();
+        const vt = v.x * tx + v.y * ty;
+        const dv = (conv.speed - vt) * k;
+        const m = body.mass() || 1;
+        body.applyImpulse({ x: tx * dv * m, y: ty * dv * m }, true);
+      }
+    }
   },
 
   checkSensorIntersections() {
