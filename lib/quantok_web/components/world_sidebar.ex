@@ -11,34 +11,28 @@ defmodule QuantokWeb.WorldSidebar do
     <nav class="q-sidebar">
       <div class="q-section">Emitters</div>
       <.item
-        label="date · word"
+        label="clock · word"
         variant="emit"
-        event="add_emitter"
-        params={%{"command" => "date", "chunker" => "word"}}
+        event="add_source_emitter"
+        params={%{"source" => "clock", "command" => "%A %B %-d", "chunker" => "word"}}
       />
       <.item
-        label="date · byte"
+        label="clock · byte"
         variant="emit"
-        event="add_emitter"
-        params={%{"command" => "date", "chunker" => "byte"}}
-      />
-      <.item
-        label="echo · token"
-        variant="emit"
-        event="add_emitter"
-        params={%{"command" => "echo hello world", "chunker" => "token"}}
-      />
-      <.item
-        label="uname · word"
-        variant="emit"
-        event="add_emitter"
-        params={%{"command" => "uname -a", "chunker" => "word"}}
+        event="add_source_emitter"
+        params={%{"source" => "clock", "command" => "%H:%M:%S", "chunker" => "byte"}}
       />
       <.item
         label="clock · rune"
         variant="emit"
         event="add_source_emitter"
-        params={%{"source" => "clock", "chunker" => "rune"}}
+        params={%{"source" => "clock", "command" => "%H:%M:%S", "chunker" => "rune"}}
+      />
+      <.item
+        label="hello · token"
+        variant="emit"
+        event="add_source_emitter"
+        params={%{"source" => "manual", "command" => "hello world", "chunker" => "token"}}
       />
       <.item
         label="A–Z · word"

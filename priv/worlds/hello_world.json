@@ -8,11 +8,11 @@
   "nodes": [
     {
       "type": "emitter",
-      "label": "echo hello world",
+      "label": "hello world",
       "position": {"x": -100.0, "y": -300.0},
       "config": {
-        "source": "Quantok.Node.Emitter.Shell",
-        "command": "echo hello world",
+        "source": "Quantok.Node.Emitter.Manual",
+        "command": "hello world",
         "chunker": "Quantok.Chunker.Word",
         "emit_rate": 150,
         "auto_repeat": false,

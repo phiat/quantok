@@ -22,10 +22,11 @@ defmodule QuantokWeb.WorldLive do
 
     emitter =
       Emitter.new(
-        command: "date",
+        source: Quantok.Node.Emitter.Clock,
+        command: "%H:%M:%S",
         chunker: Quantok.Chunker.Word,
         position: {0.0, -300.0},
-        label: "date"
+        label: "clock"
       )
 
     World.add_node(world_pid, emitter)

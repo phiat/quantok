@@ -22,11 +22,11 @@
     },
     {
       "type": "emitter",
-      "label": "echo · token",
+      "label": "hello · token",
       "position": {"x": 0.0, "y": -340.0},
       "config": {
-        "source": "Quantok.Node.Emitter.Shell",
-        "command": "echo hello world",
+        "source": "Quantok.Node.Emitter.Manual",
+        "command": "hello world",
         "chunker": "Quantok.Chunker.BPE",
         "emit_rate": 180,
         "auto_repeat": false,

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Date Pipeline",
+  "name": "Clock Pipeline",
   "environment": {
     "gravity": {"x": 0.0, "y": 9.81},
     "tick_rate": 30
@@ -8,11 +8,11 @@
   "nodes": [
     {
       "type": "emitter",
-      "label": "date",
+      "label": "clock · word",
       "position": {"x": -150.0, "y": -300.0},
       "config": {
-        "source": "Quantok.Node.Emitter.Shell",
-        "command": "date",
+        "source": "Quantok.Node.Emitter.Clock",
+        "command": "%A %B %-d",
         "chunker": "Quantok.Chunker.Word",
         "emit_rate": 120,
         "auto_repeat": false,
@@ -21,11 +21,11 @@
     },
     {
       "type": "emitter",
-      "label": "date (bytes)",
+      "label": "clock · byte",
       "position": {"x": 150.0, "y": -300.0},
       "config": {
-        "source": "Quantok.Node.Emitter.Shell",
-        "command": "date",
+        "source": "Quantok.Node.Emitter.Clock",
+        "command": "%H:%M:%S",
         "chunker": "Quantok.Chunker.Byte",
         "emit_rate": 30,
         "auto_repeat": false,
