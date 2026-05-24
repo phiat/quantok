@@ -3,6 +3,6 @@ defmodule Quantok.Node.Collector.Upcase do
   Upcase collector action. Uppercases the buffered text.
   """
 
-  @spec process(binary(), binary()) :: binary()
-  def process(_command, text), do: String.upcase(text)
+  @spec process(binary(), binary(), [Quantok.Tokene.t()]) :: binary()
+  def process(_command, text, _buffer), do: String.upcase(text)
 end

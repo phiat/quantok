@@ -404,11 +404,18 @@ const WorldCanvas = {
 
     // Create physics body based on type
     if (node.type === "passive") {
-      this.physics.spawnStatic(node.id, x, y, w / 2, h / 2,
-        node.config?.angle || 0,
-        node.config?.friction || 0.5,
-        node.config?.restitution || 0.3
-      );
+      if (node.config?.shape === "portal") {
+        // Passthrough body so tokenes drift in visually; sensor triggers teleport.
+        this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2, { passthrough: true });
+        const r = parseFloat(node.config?.radius) || 30;
+        this.physics.spawnSensor(node.id, x, y, r);
+      } else {
+        this.physics.spawnStatic(node.id, x, y, w / 2, h / 2,
+          node.config?.angle || 0,
+          node.config?.friction || 0.5,
+          node.config?.restitution || 0.3
+        );
+      }
       if (node.config?.shape === "conveyor") {
         this.conveyors.set(node.id, {
           x, y,
@@ -623,13 +630,14 @@ const WorldCanvas = {
 
   checkSensorIntersections() {
     for (const [nodeId, nodeInfo] of this.nodeData) {
-      if (nodeInfo.type !== "collector" && nodeInfo.type !== "transformer") continue;
+      const isPortal = nodeInfo.type === "passive" && nodeInfo.config?.shape === "portal";
+      if (nodeInfo.type !== "collector" && nodeInfo.type !== "transformer" && !isPortal) continue;
 
       const intersecting = this.physics.getSensorIntersections(nodeId);
       for (const tokeneId of intersecting) {
         if (!this.tokeneData.has(tokeneId)) continue;
 
-        // Cooldown to avoid spamming the server
+        // Cooldown to avoid spamming the server / ping-ponging through portals
         if (!this.sensorCooldown.has(nodeId)) {
           this.sensorCooldown.set(nodeId, new Set());
         }
@@ -637,11 +645,14 @@ const WorldCanvas = {
         if (cooldownSet.has(tokeneId)) continue;
 
         cooldownSet.add(tokeneId);
-        const cooldownMs = nodeInfo.type === "transformer" ? 1000 : 500;
+        const cooldownMs =
+          nodeInfo.type === "transformer" ? 1000 : isPortal ? 1500 : 500;
         const tid = setTimeout(() => cooldownSet.delete(tokeneId), cooldownMs);
         this._pendingTimeouts.push(tid);
 
-        if (nodeInfo.type === "collector") {
+        if (isPortal) {
+          this._teleportThroughPortal(nodeId, nodeInfo, tokeneId, cooldownMs);
+        } else if (nodeInfo.type === "collector") {
           this.pushEvent("tokene_near_collector", {
             tokene_id: tokeneId,
             collector_id: nodeId,
@@ -654,6 +665,49 @@ const WorldCanvas = {
         }
       }
     }
+  },
+
+  _teleportThroughPortal(srcId, srcInfo, tokeneId, cooldownMs) {
+    const channel = srcInfo.config?.channel;
+    if (!channel) return;
+
+    // Find a peer portal with the same channel (any one — first match wins).
+    let dstInfo = null;
+    let dstId = null;
+    for (const [id, info] of this.nodeData) {
+      if (id === srcId) continue;
+      if (info.type !== "passive" || info.config?.shape !== "portal") continue;
+      if (info.config?.channel === channel) {
+        dstId = id;
+        dstInfo = info;
+        break;
+      }
+    }
+    if (!dstInfo) return;
+
+    const body = this.physics.getBody(tokeneId);
+    if (!body) return;
+
+    const dst = this.physics.getTransform(dstId);
+    if (!dst) return;
+
+    // Exit just above the destination ring so the tokene drops out the top
+    // rather than spawning inside the sensor (which would re-trigger the
+    // destination's cooldown and potentially tunnel through it).
+    // Rapier is Y-down so "above" means -y.
+    const r = parseFloat(dstInfo.config?.radius) || 30;
+    body.setTranslation({ x: dst.x, y: dst.y - r - 4 }, true);
+    if (body.setLinvel) body.setLinvel({ x: 0, y: 0 }, true);
+    if (body.setAngvel) body.setAngvel(0, true);
+
+    // Reserve the destination too so the tokene doesn't bounce right back.
+    if (!this.sensorCooldown.has(dstId)) {
+      this.sensorCooldown.set(dstId, new Set());
+    }
+    const dstCd = this.sensorCooldown.get(dstId);
+    dstCd.add(tokeneId);
+    const tid = setTimeout(() => dstCd.delete(tokeneId), cooldownMs);
+    this._pendingTimeouts.push(tid);
   },
 };
 

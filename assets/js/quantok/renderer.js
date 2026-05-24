@@ -20,6 +20,17 @@ const MIN_TEXT_FONT_SIZE = 5;
 // Pool more than tokene cap so brief spikes (shatter cascades) don't churn.
 const MESH_POOL_CAP = 600;
 
+// Distinct hue per portal channel so paired endpoints are visually obvious.
+const PORTAL_CHANNEL_COLORS = {
+  A: 0xffefd3,
+  B: 0xffc49b,
+  C: 0xadb6c4,
+  D: 0xcc66cc,
+};
+function portalChannelColor(ch) {
+  return PORTAL_CHANNEL_COLORS[ch] || 0xffefd3;
+}
+
 export class WorldRenderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -356,6 +367,36 @@ export class WorldRenderer {
         mesh.position.set(cx, 0, 0.2);
         group.add(mesh);
       }
+    }
+
+    // Portal: glowing ring color-coded by channel, with the letter in the middle
+    if (nodeType === "passive" && config.shape === "portal") {
+      const ch = String(config.channel || "A");
+      const channelColor = portalChannelColor(ch);
+      bodyMat.color.setHex(channelColor);
+      bodyMat.opacity = 0.25;
+
+      const radius = parseFloat(config.radius) || 30;
+      const ringGeo = new THREE.RingGeometry(radius - 2, radius, 48);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: channelColor,
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.z = 0.1;
+      group.add(ring);
+
+      const chText = new Text();
+      chText.text = ch;
+      chText.fontSize = Math.min(width, height) * 0.55;
+      chText.color = channelColor;
+      chText.anchorX = "center";
+      chText.anchorY = "middle";
+      chText.position.z = 0.2;
+      chText.sync();
+      group.add(chText);
     }
 
     group.userData = { id, nodeType };

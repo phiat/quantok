@@ -3,19 +3,21 @@ defmodule Quantok.Node.Passive do
   Passive nodes are static world elements that shape physics.
 
   Config:
-  - :shape - :floor | :wall | :ramp | :funnel | :attractor | :repeller | :conveyor
+  - :shape - :floor | :wall | :ramp | :funnel | :attractor | :repeller | :conveyor | :portal
   - :width / :height - dimensions
   - :angle - rotation for ramps (radians)
   - :strength - force magnitude for attractors/repellers
-  - :radius - effect radius for attractors/repellers
+  - :radius - effect radius for attractors/repellers/portals
   - :friction - surface friction coefficient
   - :restitution - bounciness (0.0 = no bounce, 1.0 = perfect bounce)
   - :speed - surface velocity for conveyors (px/s, signed; negative = leftward in local frame)
+  - :channel - pairing key for portals (same channel = paired endpoints)
   """
 
   alias Quantok.Node
 
-  @type shape :: :floor | :wall | :ramp | :funnel | :attractor | :repeller | :conveyor
+  @type shape ::
+          :floor | :wall | :ramp | :funnel | :attractor | :repeller | :conveyor | :portal
 
   @doc """
   Creates a new passive node.
@@ -28,10 +30,11 @@ defmodule Quantok.Node.Passive do
       height: Keyword.get(opts, :height, default_height(shape)),
       angle: Keyword.get(opts, :angle, 0.0),
       strength: Keyword.get(opts, :strength, 1.0),
-      radius: Keyword.get(opts, :radius, 100.0),
+      radius: Keyword.get(opts, :radius, default_radius(shape)),
       friction: Keyword.get(opts, :friction, default_friction(shape)),
       restitution: Keyword.get(opts, :restitution, 0.3),
-      speed: Keyword.get(opts, :speed, default_speed(shape))
+      speed: Keyword.get(opts, :speed, default_speed(shape)),
+      channel: Keyword.get(opts, :channel, default_channel(shape))
     }
 
     Node.new(:passive, %{
@@ -71,6 +74,7 @@ defmodule Quantok.Node.Passive do
   defp default_width(:ramp), do: 150.0
   defp default_width(:funnel), do: 120.0
   defp default_width(:conveyor), do: 240.0
+  defp default_width(:portal), do: 40.0
   defp default_width(_), do: 0.0
 
   defp default_height(:floor), do: 10.0
@@ -78,13 +82,20 @@ defmodule Quantok.Node.Passive do
   defp default_height(:ramp), do: 10.0
   defp default_height(:funnel), do: 80.0
   defp default_height(:conveyor), do: 12.0
+  defp default_height(:portal), do: 40.0
   defp default_height(_), do: 0.0
+
+  defp default_radius(:portal), do: 30.0
+  defp default_radius(_), do: 100.0
 
   defp default_friction(:conveyor), do: 0.9
   defp default_friction(_), do: 0.5
 
   defp default_speed(:conveyor), do: 80.0
   defp default_speed(_), do: 0.0
+
+  defp default_channel(:portal), do: "A"
+  defp default_channel(_), do: nil
 
   defp passive_label(:floor), do: "Floor"
   defp passive_label(:wall), do: "Wall"
@@ -93,4 +104,5 @@ defmodule Quantok.Node.Passive do
   defp passive_label(:attractor), do: "Attractor"
   defp passive_label(:repeller), do: "Repeller"
   defp passive_label(:conveyor), do: "Conveyor"
+  defp passive_label(:portal), do: "Portal"
 end

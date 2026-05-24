@@ -151,6 +151,50 @@ defmodule Quantok.World.SnapshotTest do
     File.rm_rf!(dir)
   end
 
+  test "portal channel round-trips through save/load", %{pid: pid} do
+    portal_a = Passive.new(:portal, channel: "B", label: "portal B")
+    World.add_node(pid, portal_a)
+
+    world = World.get_state(pid)
+    {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
+
+    portal_node = Enum.find(decoded["nodes"], &(&1["label"] == "portal B"))
+    assert portal_node["config"]["channel"] == "B"
+
+    {:ok, pid2} = World.start_link(world_name: "round-trip")
+    {:ok, 1} = Snapshot.load_into(pid2, decoded)
+
+    loaded = pid2 |> World.get_state() |> Map.fetch!(:nodes) |> Map.values() |> hd()
+    assert loaded.config.shape == :portal
+    assert loaded.config.channel == "B"
+  end
+
+  test "tiktoken transformer effect round-trips through save/load", %{pid: pid} do
+    World.add_node(pid, Transformer.new(:tiktoken, label: "tk"))
+
+    world = World.get_state(pid)
+    {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
+
+    {:ok, pid2} = World.start_link(world_name: "tk-roundtrip")
+    {:ok, 1} = Snapshot.load_into(pid2, decoded)
+
+    loaded = pid2 |> World.get_state() |> Map.fetch!(:nodes) |> Map.values() |> hd()
+    assert loaded.config.effect == :tiktoken
+  end
+
+  test "math collector actions round-trip through save/load", %{pid: pid} do
+    World.add_node(pid, Collector.new(action: Quantok.Node.Collector.Sum, label: "sum"))
+
+    world = World.get_state(pid)
+    {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
+
+    {:ok, pid2} = World.start_link(world_name: "sum-roundtrip")
+    {:ok, 1} = Snapshot.load_into(pid2, decoded)
+
+    loaded = pid2 |> World.get_state() |> Map.fetch!(:nodes) |> Map.values() |> hd()
+    assert loaded.config.action == Quantok.Node.Collector.Sum
+  end
+
   test "snapshot preserves emit config", %{pid: pid} do
     collector =
       Collector.new(

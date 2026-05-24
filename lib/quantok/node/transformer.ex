@@ -22,6 +22,7 @@ defmodule Quantok.Node.Transformer do
           | :filter
           | :duplicator
           | :painter
+          | :tiktoken
 
   @doc """
   Creates a new transformer node.
@@ -66,6 +67,14 @@ defmodule Quantok.Node.Transformer do
   def apply_effect(%Node{config: %{effect: :crusher}}, tokene) do
     chunks = Chunker.Byte.chunk(tokene.value)
     Enum.map(chunks, &Tokene.new(&1, :byte, tokene.source_id))
+  end
+
+  def apply_effect(%Node{config: %{effect: :tiktoken}}, tokene) do
+    tokene.value
+    |> Tiktokenex.encode()
+    |> Enum.map(&Tokene.new(Integer.to_string(&1), :token, tokene.source_id))
+  rescue
+    _ -> [tokene]
   end
 
   def apply_effect(%Node{config: %{effect: :heater, strength: strength}}, tokene) do

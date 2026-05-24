@@ -8,8 +8,8 @@ defmodule Quantok.Node.Collector.Hash do
   data condenser — N tokenes in, one fixed-size hex tokene out.
   """
 
-  @spec process(binary(), binary()) :: binary()
-  def process(command, text) do
+  @spec process(binary(), binary(), [Quantok.Tokene.t()]) :: binary()
+  def process(command, text, _buffer) do
     algo = algo_for(command)
 
     algo

@@ -203,7 +203,8 @@ defmodule Quantok.World.Snapshot do
       "restitution" => config.restitution,
       "strength" => config.strength,
       "radius" => config.radius,
-      "speed" => Map.get(config, :speed, 0.0)
+      "speed" => Map.get(config, :speed, 0.0),
+      "channel" => Map.get(config, :channel)
     }
   end
 
@@ -280,6 +281,7 @@ defmodule Quantok.World.Snapshot do
         label: data["label"]
       ]
       |> maybe_put(:speed, config["speed"])
+      |> maybe_put(:channel, config["channel"])
 
     Passive.new(shape, opts)
   end
@@ -318,7 +320,10 @@ defmodule Quantok.World.Snapshot do
     "Quantok.Node.Collector.Upcase" => Quantok.Node.Collector.Upcase,
     "Quantok.Node.Collector.Count" => Quantok.Node.Collector.Count,
     "Quantok.Node.Collector.Display" => Quantok.Node.Collector.Display,
-    "Quantok.Node.Collector.Hash" => Quantok.Node.Collector.Hash
+    "Quantok.Node.Collector.Hash" => Quantok.Node.Collector.Hash,
+    "Quantok.Node.Collector.Sum" => Quantok.Node.Collector.Sum,
+    "Quantok.Node.Collector.Min" => Quantok.Node.Collector.Min,
+    "Quantok.Node.Collector.Max" => Quantok.Node.Collector.Max
   }
 
   defp safe_trigger_mode("on_full"), do: :on_full
@@ -334,6 +339,7 @@ defmodule Quantok.World.Snapshot do
   defp safe_effect("filter"), do: :filter
   defp safe_effect("duplicator"), do: :duplicator
   defp safe_effect("painter"), do: :painter
+  defp safe_effect("tiktoken"), do: :tiktoken
   defp safe_effect(_), do: :splitter
 
   defp safe_shape("floor"), do: :floor
@@ -343,6 +349,7 @@ defmodule Quantok.World.Snapshot do
   defp safe_shape("attractor"), do: :attractor
   defp safe_shape("repeller"), do: :repeller
   defp safe_shape("conveyor"), do: :conveyor
+  defp safe_shape("portal"), do: :portal
   defp safe_shape(_), do: :floor
 
   defp safe_collector_command(action, command) do

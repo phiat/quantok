@@ -144,6 +144,24 @@ defmodule QuantokWeb.WorldSidebar do
         event="add_emit_collector"
         params={%{"action" => "hash", "capacity" => "8", "chunker" => "word"}}
       />
+      <.item
+        label="sum · emit"
+        variant="collect"
+        event="add_emit_collector"
+        params={%{"action" => "sum", "capacity" => "8", "chunker" => "word"}}
+      />
+      <.item
+        label="min · emit"
+        variant="collect"
+        event="add_emit_collector"
+        params={%{"action" => "min", "capacity" => "8", "chunker" => "word"}}
+      />
+      <.item
+        label="max · emit"
+        variant="collect"
+        event="add_emit_collector"
+        params={%{"action" => "max", "capacity" => "8", "chunker" => "word"}}
+      />
 
       <div class="q-section">Transformers</div>
       <.item
@@ -176,6 +194,12 @@ defmodule QuantokWeb.WorldSidebar do
         event="add_transformer"
         params={%{"effect" => "crusher"}}
       />
+      <.item
+        label="tiktoken"
+        variant="transform"
+        event="add_transformer"
+        params={%{"effect" => "tiktoken"}}
+      />
 
       <div class="q-section">World</div>
       <.item label="ramp" variant="passive" event="add_passive" params={%{"shape" => "ramp"}} />
@@ -192,6 +216,18 @@ defmodule QuantokWeb.WorldSidebar do
         variant="passive"
         event="add_passive"
         params={%{"shape" => "conveyor", "speed" => "-80"}}
+      />
+      <.item
+        label="portal · A"
+        variant="passive"
+        event="add_passive"
+        params={%{"shape" => "portal", "channel" => "A"}}
+      />
+      <.item
+        label="portal · B"
+        variant="passive"
+        event="add_passive"
+        params={%{"shape" => "portal", "channel" => "B"}}
       />
     </nav>
     """

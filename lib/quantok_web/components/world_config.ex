@@ -140,7 +140,7 @@ defmodule QuantokWeb.WorldConfig do
       <label class="q-cfg-label">action</label>
       <div class="q-cfg-btns">
         <button
-          :for={a <- ~w(echo reverse upcase count hash)}
+          :for={a <- ~w(echo reverse upcase count hash sum min max)}
           phx-click="update_node_config"
           phx-value-field="action"
           phx-value-val={a}
@@ -209,7 +209,7 @@ defmodule QuantokWeb.WorldConfig do
       <label class="q-cfg-label">effect</label>
       <div class="q-cfg-btns">
         <button
-          :for={e <- ~w(splitter heater cooler duplicator crusher)}
+          :for={e <- ~w(splitter heater cooler duplicator crusher tiktoken)}
           phx-click="update_node_config"
           phx-value-field="effect"
           phx-value-val={e}
@@ -243,7 +243,7 @@ defmodule QuantokWeb.WorldConfig do
       <label class="q-cfg-label">shape</label>
       <div class="q-cfg-btns">
         <button
-          :for={s <- ~w(floor wall ramp funnel conveyor)}
+          :for={s <- ~w(floor wall ramp funnel conveyor portal)}
           phx-click="update_node_config"
           phx-value-field="shape"
           phx-value-val={s}
@@ -277,6 +277,21 @@ defmodule QuantokWeb.WorldConfig do
             class={"q-cfg-btn" <> if(round(@config.speed) == s, do: " q-cfg-btn--active", else: "")}
           >
             {s}
+          </button>
+        </div>
+      </div>
+
+      <div :if={@config.shape == :portal}>
+        <label class="q-cfg-label">channel</label>
+        <div class="q-cfg-btns">
+          <button
+            :for={c <- ~w(A B C D)}
+            phx-click="update_node_config"
+            phx-value-field="channel"
+            phx-value-val={c}
+            class={"q-cfg-btn" <> if(to_string(@config.channel) == c, do: " q-cfg-btn--active", else: "")}
+          >
+            {c}
           </button>
         </div>
       </div>

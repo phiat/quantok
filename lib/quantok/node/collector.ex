@@ -87,7 +87,7 @@ defmodule Quantok.Node.Collector do
 
   def trigger(%Node{type: :collector, config: config} = node, world_decay) do
     text = buffer_text(node)
-    output = config.action.process(config.command, text)
+    output = config.action.process(config.command, text, config.buffer)
     cleared = %{node | config: %{config | buffer: [], ticks_since_trigger: 0}}
 
     if config.emit and config.output_chunker != nil do

@@ -783,6 +783,7 @@ defmodule QuantokWeb.WorldLive do
       "shape" -> %{config | shape: shape_atom(params["val"]) || config.shape}
       "width" -> %{config | width: parse_float(params["val"], config.width)}
       "speed" -> %{config | speed: parse_float(params["val"], config.speed)}
+      "channel" -> %{config | channel: params["val"] |> to_string() |> String.slice(0, 8)}
       _ -> config
     end
   end
@@ -923,7 +924,8 @@ defmodule QuantokWeb.WorldLive do
       :trigger_mode,
       :emit,
       :tick_interval,
-      :speed
+      :speed,
+      :channel
     ])
     |> Map.new(fn {k, v} -> {to_string(k), serialize_value(v)} end)
   end
@@ -936,6 +938,11 @@ defmodule QuantokWeb.WorldLive do
     [position: {x, 100.0}, speed: speed]
   end
 
+  defp passive_opts(:portal, params, x) do
+    channel = (params["channel"] || "A") |> to_string() |> String.slice(0, 8)
+    [position: {x, 100.0}, channel: channel]
+  end
+
   defp passive_opts(_shape, _params, x), do: [position: {x, 100.0}]
 
   defp effect_atom("splitter"), do: :splitter
@@ -945,6 +952,7 @@ defmodule QuantokWeb.WorldLive do
   defp effect_atom("filter"), do: :filter
   defp effect_atom("duplicator"), do: :duplicator
   defp effect_atom("painter"), do: :painter
+  defp effect_atom("tiktoken"), do: :tiktoken
   defp effect_atom(_), do: nil
 
   defp shape_atom("floor"), do: :floor
@@ -954,6 +962,7 @@ defmodule QuantokWeb.WorldLive do
   defp shape_atom("attractor"), do: :attractor
   defp shape_atom("repeller"), do: :repeller
   defp shape_atom("conveyor"), do: :conveyor
+  defp shape_atom("portal"), do: :portal
   defp shape_atom(_), do: nil
 
   defp source_module("clock"), do: Quantok.Node.Emitter.Clock
@@ -971,6 +980,9 @@ defmodule QuantokWeb.WorldLive do
   defp collector_action("count"), do: Quantok.Node.Collector.Count
   defp collector_action("display"), do: Quantok.Node.Collector.Display
   defp collector_action("hash"), do: Quantok.Node.Collector.Hash
+  defp collector_action("sum"), do: Quantok.Node.Collector.Sum
+  defp collector_action("min"), do: Quantok.Node.Collector.Min
+  defp collector_action("max"), do: Quantok.Node.Collector.Max
   defp collector_action(_), do: Quantok.Node.Collector.Echo
 
   defp shatter_atom("split"), do: :split
