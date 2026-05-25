@@ -272,7 +272,18 @@ defmodule Quantok.Tokene do
     end
   end
 
-  def display_value(%__MODULE__{value: value}) when is_binary(value) do
+  def display_value(%__MODULE__{value: value}) when is_binary(value),
+    do: safe_binary(value)
+
+  def display_value(%__MODULE__{}), do: ""
+
+  @doc """
+  JSON-safe rendering of an arbitrary binary. Invalid UTF-8 (e.g. a buffer
+  that joined sub-rune byte chunks) becomes space-separated hex so the wire
+  payload survives Jason encoding.
+  """
+  @spec safe_binary(binary()) :: String.t()
+  def safe_binary(value) when is_binary(value) do
     if String.valid?(value) do
       value
     else
@@ -282,8 +293,6 @@ defmodule Quantok.Tokene do
       |> String.upcase()
     end
   end
-
-  def display_value(%__MODULE__{}), do: ""
 
   @doc """
   Returns true if this tokene can be split further.

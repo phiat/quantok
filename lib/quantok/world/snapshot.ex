@@ -160,7 +160,7 @@ defmodule Quantok.World.Snapshot do
       "chunker" => module_to_string(config.chunker),
       "emit_rate" => config.emit_rate,
       "auto_repeat" => config[:auto_repeat] || false,
-      "repeat_interval" => config[:repeat_interval] || 5000
+      "repeat_interval" => config[:repeat_interval] || 3_000
     }
   end
 
@@ -306,6 +306,7 @@ defmodule Quantok.World.Snapshot do
     "Quantok.Node.Emitter.Shell" => Quantok.Node.Emitter.Shell,
     "Quantok.Node.Emitter.Manual" => Quantok.Node.Emitter.Manual,
     "Quantok.Node.Emitter.Clock" => Quantok.Node.Emitter.Clock,
+    "Quantok.Node.Emitter.Emoji" => Quantok.Node.Emitter.Emoji,
     "Quantok.Node.Emitter.File" => Quantok.Node.Emitter.File,
     "Quantok.Node.Emitter.Sequence" => Quantok.Node.Emitter.Sequence,
     "Quantok.Node.Emitter.Random" => Quantok.Node.Emitter.Random

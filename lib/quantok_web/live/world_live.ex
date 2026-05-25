@@ -55,6 +55,9 @@ defmodule QuantokWeb.WorldLive do
       |> assign(:decay_enabled, true)
       |> assign(:decay_rate, 1.0)
       |> assign(:decay_shatter, :split)
+      |> assign(:auto_fire, false)
+      |> assign(:auto_fire_interval, 3_000)
+      |> assign(:last_auto_fire_at, 0)
       |> assign(:selected_node, nil)
       |> assign(:template_node, nil)
       |> assign(:next_x, 0)
@@ -80,6 +83,22 @@ defmodule QuantokWeb.WorldLive do
         <span class="q-logo">Quantok</span>
         <span class="q-sep"></span>
         <button phx-click="fire_all" class="q-tb">fire all</button>
+        <button
+          phx-click="toggle_auto_fire"
+          class={"q-tb" <> if(@auto_fire, do: " q-tb--active", else: "")}
+        >
+          {if @auto_fire, do: "auto on", else: "auto off"}
+        </button>
+        <span :if={@auto_fire} class="q-decay-group">
+          <button
+            :for={r <- [{6_000, "½×"}, {3_000, "1×"}, {1_500, "2×"}, {300, "10×"}]}
+            phx-click="set_auto_fire_interval"
+            phx-value-interval={elem(r, 0)}
+            class={"q-tb q-tb--sm" <> if(@auto_fire_interval == elem(r, 0), do: " q-tb--active", else: "")}
+          >
+            {elem(r, 1)}
+          </button>
+        </span>
         <button phx-click="toggle_pause" class="q-tb">
           {if @paused, do: "resume", else: "pause"}
         </button>
@@ -201,6 +220,18 @@ defmodule QuantokWeb.WorldLive do
   def handle_event("fire_all", _params, socket) do
     World.fire_all_emitters(socket.assigns.world_pid)
     {:noreply, socket}
+  end
+
+  def handle_event("toggle_auto_fire", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:auto_fire, !socket.assigns.auto_fire)
+     |> assign(:last_auto_fire_at, 0)}
+  end
+
+  def handle_event("set_auto_fire_interval", %{"interval" => interval}, socket) do
+    ms = parse_int(interval, socket.assigns.auto_fire_interval)
+    {:noreply, assign(socket, :auto_fire_interval, ms)}
   end
 
   def handle_event("clear_tokenes", _params, socket) do
@@ -450,21 +481,27 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_info({:trigger, collector_id, output}, socket) do
+    safe_output = if is_binary(output), do: Tokene.safe_binary(output), else: output
+
     socket =
       socket
       |> push_event("update_collector", %{
         collector_id: collector_id,
         buffer: [],
-        output: output
+        output: safe_output
       })
 
     {:noreply, socket}
   end
 
   def handle_info(:tick, socket) do
-    unless socket.assigns.paused do
-      World.tick(socket.assigns.world_pid)
-    end
+    socket =
+      if socket.assigns.paused do
+        socket
+      else
+        World.tick(socket.assigns.world_pid)
+        maybe_auto_fire(socket)
+      end
 
     Process.send_after(self(), :tick, socket.assigns.tick_rate)
     {:noreply, socket}
@@ -492,6 +529,19 @@ defmodule QuantokWeb.WorldLive do
   end
 
   # Helpers
+
+  defp maybe_auto_fire(%{assigns: %{auto_fire: false}} = socket), do: socket
+
+  defp maybe_auto_fire(%{assigns: %{auto_fire: true} = a} = socket) do
+    now_ms = System.monotonic_time(:millisecond)
+
+    if now_ms - a.last_auto_fire_at >= a.auto_fire_interval do
+      World.fire_all_emitters(a.world_pid)
+      assign(socket, :last_auto_fire_at, now_ms)
+    else
+      socket
+    end
+  end
 
   defp do_load_world(socket, snapshot, name) do
     world = World.get_state(socket.assigns.world_pid)

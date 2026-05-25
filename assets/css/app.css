@@ -10,6 +10,9 @@
   --q-slate: #adb6c4;
   --q-papaya: #ffefd3;
   --q-peach: #ffc49b;
+  /* Sidebar ~15% lighter than prussian; topbar prussian with a touch of purple. */
+  --q-sidebar-bg: #263d4d;
+  --q-topbar-bg: #15102e;
 }
 
 body { margin: 0; overflow: hidden; }
@@ -38,7 +41,7 @@ body { margin: 0; overflow: hidden; }
   align-items: center;
   gap: 0.25rem;
   padding: 0.25rem 0.5rem;
-  background: var(--q-prussian);
+  background: var(--q-topbar-bg);
   border-bottom: 1px solid var(--q-charcoal);
   font-family: "Inter", "Helvetica Neue", system-ui, sans-serif;
 }
@@ -109,7 +112,7 @@ body { margin: 0; overflow: hidden; }
 .q-sidebar {
   flex: 0 0 9rem;
   min-width: 9rem;
-  background: var(--q-prussian);
+  background: var(--q-sidebar-bg);
   border-right: 1px solid var(--q-charcoal);
   padding: 0.5rem;
   display: flex;
@@ -174,6 +177,8 @@ body { margin: 0; overflow: hidden; }
 .q-row-body:hover { background: #3a6278; }
 .q-row-add:hover { background: #3a6278; color: var(--q-papaya); }
 .q-row--emit { border-left: 2px solid #44cc88; }
+.q-row--emit .q-row-body,
+.q-row--emit .q-row-add { padding-top: 0.125rem; padding-bottom: 0.125rem; }
 .q-row--collect { border-left: 2px solid var(--q-peach); }
 .q-row--transform { border-left: 2px solid #cc66cc; }
 .q-row--passive { border-left: 2px solid var(--q-slate); }

@@ -11,19 +11,7 @@ defmodule QuantokWeb.WorldSidebar do
     <nav class="q-sidebar">
       <div class="q-section">Emitters</div>
       <.item
-        label="clock · word"
-        variant="emit"
-        event="add_source_emitter"
-        params={%{"source" => "clock", "command" => "%A %B %-d", "chunker" => "word"}}
-      />
-      <.item
-        label="clock · byte"
-        variant="emit"
-        event="add_source_emitter"
-        params={%{"source" => "clock", "command" => "%H:%M:%S", "chunker" => "byte"}}
-      />
-      <.item
-        label="clock · rune"
+        label="clock"
         variant="emit"
         event="add_source_emitter"
         params={%{"source" => "clock", "command" => "%H:%M:%S", "chunker" => "rune"}}
@@ -53,16 +41,10 @@ defmodule QuantokWeb.WorldSidebar do
         }
       />
       <.item
-        label="random alnum · byte"
+        label="random · byte"
         variant="emit"
         event="add_source_emitter"
         params={%{"source" => "random", "command" => "alnum:32", "chunker" => "byte"}}
-      />
-      <.item
-        label="random hex · byte"
-        variant="emit"
-        event="add_source_emitter"
-        params={%{"source" => "random", "command" => "hex:32", "chunker" => "byte"}}
       />
       <.item
         label="shell · word"
@@ -76,7 +58,7 @@ defmodule QuantokWeb.WorldSidebar do
         event="add_source_emitter"
         params={
           %{
-            "source" => "manual",
+            "source" => "emoji",
             "command" => "🚀🌌💫🌟⚡🔥💧🌱🌳🌲🌴🍀🌷🌹🌻🌼🍄🌊🌋🏔️🐶🐱🐭🐰🦊🐻🐼🦁🐢🦋🐝🐙🦀🍎🍊🍋🍌🍉🍇🍓🍑🍕🍔🍟😀😎🤔🤖⚽🎨",
             "chunker" => "rune"
           }
@@ -85,16 +67,10 @@ defmodule QuantokWeb.WorldSidebar do
 
       <div class="q-section">Collectors</div>
       <.item
-        label="collect · 8"
+        label="collect"
         variant="collect"
         event="add_collector"
         params={%{"capacity" => "8"}}
-      />
-      <.item
-        label="collect · 16"
-        variant="collect"
-        event="add_collector"
-        params={%{"capacity" => "16"}}
       />
       <.item
         label="reverse · 8"
@@ -145,22 +121,10 @@ defmodule QuantokWeb.WorldSidebar do
         params={%{"action" => "hash", "capacity" => "8", "chunker" => "word"}}
       />
       <.item
-        label="sum · emit"
+        label="math · emit"
         variant="collect"
         event="add_emit_collector"
         params={%{"action" => "sum", "capacity" => "8", "chunker" => "word"}}
-      />
-      <.item
-        label="min · emit"
-        variant="collect"
-        event="add_emit_collector"
-        params={%{"action" => "min", "capacity" => "8", "chunker" => "word"}}
-      />
-      <.item
-        label="max · emit"
-        variant="collect"
-        event="add_emit_collector"
-        params={%{"action" => "max", "capacity" => "8", "chunker" => "word"}}
       />
 
       <div class="q-section">Transformers</div>
@@ -201,32 +165,20 @@ defmodule QuantokWeb.WorldSidebar do
         params={%{"effect" => "tiktoken"}}
       />
       <.item
-        label="magnet · attract"
+        label="magnet"
         variant="transform"
         event="add_transformer"
         params={%{"effect" => "magnet", "polarity" => "attract"}}
-      />
-      <.item
-        label="magnet · repel"
-        variant="transform"
-        event="add_transformer"
-        params={%{"effect" => "magnet", "polarity" => "repel"}}
       />
 
       <div class="q-section">World</div>
       <.item label="ramp" variant="passive" event="add_passive" params={%{"shape" => "ramp"}} />
       <.item label="wall" variant="passive" event="add_passive" params={%{"shape" => "wall"}} />
       <.item
-        label="conveyor →"
+        label="conveyor"
         variant="passive"
         event="add_passive"
         params={%{"shape" => "conveyor", "speed" => "80"}}
-      />
-      <.item
-        label="conveyor ←"
-        variant="passive"
-        event="add_passive"
-        params={%{"shape" => "conveyor", "speed" => "-80"}}
       />
       <.item
         label="portal"

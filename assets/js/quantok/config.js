@@ -41,7 +41,7 @@ export const SENSOR_COOLDOWN_MS = {
 export const MAGNET_DT = 1 / 60;
 
 // Conveyor surface drag tuning.
-export const CONVEYOR_COUPLING = 0.15;     // tangent-speed coupling factor
+export const CONVEYOR_COUPLING = 0.4;      // tangent-speed coupling factor
 export const CONVEYOR_CONTACT_BAND = 4;    // px above the surface still treated as resting
 
 // Portal exit: drop the teleported tokene this far above the destination ring

@@ -413,6 +413,7 @@ defmodule QuantokWeb.WorldSidebar.Actions do
   def shape_atom(_), do: nil
 
   def source_module("clock"), do: Quantok.Node.Emitter.Clock
+  def source_module("emoji"), do: Quantok.Node.Emitter.Emoji
   def source_module("file"), do: Quantok.Node.Emitter.File
   def source_module("manual"), do: Quantok.Node.Emitter.Manual
   def source_module("sequence"), do: Quantok.Node.Emitter.Sequence

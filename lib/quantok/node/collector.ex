@@ -64,7 +64,10 @@ defmodule Quantok.Node.Collector do
   """
   @spec buffer_text(Node.t()) :: binary()
   def buffer_text(%Node{type: :collector, config: %{buffer: buffer}}) do
-    Enum.map_join(buffer, & &1.value)
+    # display_value/1 renders bits as "0"/"1" and sub-UTF-8 byte chunks as
+    # hex, so the action layer always receives a regular binary instead of
+    # an unprintable bitstring or invalid UTF-8.
+    Enum.map_join(buffer, &Tokene.display_value/1)
   end
 
   @doc """

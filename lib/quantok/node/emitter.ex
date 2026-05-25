@@ -38,7 +38,7 @@ defmodule Quantok.Node.Emitter do
       chunker_opts: Keyword.get(opts, :chunker_opts, %{}),
       emit_rate: Keyword.get(opts, :emit_rate, 250),
       auto_repeat: Keyword.get(opts, :auto_repeat, false),
-      repeat_interval: Keyword.get(opts, :repeat_interval, 5000),
+      repeat_interval: Keyword.get(opts, :repeat_interval, 3_000),
       decay: Keyword.get(opts, :decay, %{})
     }
 
@@ -90,6 +90,10 @@ defmodule Quantok.Node.Emitter do
     Map.merge(base, emitter_decay)
   end
 
+  defp execute_source(%{source: __MODULE__.Emoji, command: command} = config) do
+    __MODULE__.Emoji.execute(command, Map.get(config, :emoji_cursor, 0))
+  end
+
   defp execute_source(%{source: source, command: command}) do
     source.execute(command)
   end
@@ -97,4 +101,22 @@ defmodule Quantok.Node.Emitter do
   defp chunk_output(output, %{chunker: chunker}) do
     chunker.chunk(output)
   end
+
+  @doc """
+  Post-fire hook: advances stateful cursors (currently just emoji source).
+  Returns an updated node so the world genserver can swap it into state.
+  """
+  @spec after_fire(Node.t()) :: Node.t()
+  def after_fire(%Node{type: :emitter, config: %{source: __MODULE__.Emoji, command: cmd} = config} = node) do
+    case __MODULE__.Emoji.count(cmd) do
+      0 ->
+        node
+
+      n ->
+        cursor = Map.get(config, :emoji_cursor, 0)
+        %{node | config: Map.put(config, :emoji_cursor, rem(cursor + 1, n))}
+    end
+  end
+
+  def after_fire(node), do: node
 end

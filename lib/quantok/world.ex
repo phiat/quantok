@@ -167,6 +167,7 @@ defmodule Quantok.World do
   def handle_call({:fire_emitter, emitter_id}, _from, {world, events}) do
     with %Node{type: :emitter} = node <- Map.get(world.nodes, emitter_id),
          {:ok, tokenes} <- Emitter.fire(node, Map.get(world.environment, :decay, %{})) do
+      world = advance_emitter_cursor(world, node)
       event = {:emitted, emitter_id, tokenes, now()}
       world = Event.apply(world, event)
       broadcast(world, {:emit, emitter_id, tokenes, node.config.emit_rate})
@@ -187,6 +188,7 @@ defmodule Quantok.World do
       |> Enum.reduce({[], world, events}, fn node, {acc, w, evts} ->
         case Emitter.fire(node, decay) do
           {:ok, tokenes} ->
+            w = advance_emitter_cursor(w, node)
             event = {:emitted, node.id, tokenes, now()}
             w = Event.apply(w, event)
             broadcast(w, {:emit, node.id, tokenes, node.config.emit_rate})
@@ -401,6 +403,14 @@ defmodule Quantok.World do
   end
 
   @rotation_steps [0.0, 0.2618, 0.5236, 0.7854, -0.7854, -0.5236, -0.2618]
+  # Some emitter sources (Emoji) carry a cursor in config. After firing we ask
+  # the source to compute the next cursor and quietly swap the node in state —
+  # this is not an event-sourced mutation, just transient tick state.
+  defp advance_emitter_cursor(world, node) do
+    updated = Emitter.after_fire(node)
+    if updated == node, do: world, else: %{world | nodes: Map.put(world.nodes, node.id, updated)}
+  end
+
   defp rotate_angle(current) do
     idx = Enum.find_index(@rotation_steps, &(abs(&1 - current) < 0.01)) || 0
     Enum.at(@rotation_steps, rem(idx + 1, length(@rotation_steps)))
