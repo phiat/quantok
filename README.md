@@ -63,19 +63,19 @@ See [docs/architecture.md](docs/architecture.md) for the full module map and dat
 
 The core mechanic. The same data chunked at different granularities produces tokenes with different physical properties:
 
-| Encoding | Chunker   | Feel     | Example: `"Hi, World! Quantok 🚀"`                                       |
+| Encoding | Chunker   | Feel     | Example: `"Hi, World, Quantok 🚀"`                                       |
 |----------|-----------|----------|--------------------------------------------------------------------------|
 | bit      | Bit       | sand     | `0 1 0 0 1 0 0 0 …` (184 bits)                                           |
 | byte     | Byte      | gravel   | `"H" "i" "," " " "W" "o" "r" … "Q" "u" "a" "n" "t" "o" "k" " " …` (23)   |
 | rune     | Rune      | pebble   | `"H" "i" "," " " "W" "o" "r" … "Q" "u" "a" "n" "t" "o" "k" " " "🚀"` (20)|
-| token    | BPE       | stone    | `"Hi" "," " World" "!" " Quant" "ok"` + 3 sub-byte chunks for `🚀` (9)    |
-| word     | Word      | brick    | `"Hi," "World!" "Quantok" "🚀"` (4)                                      |
-| phrase   | Phrase    | block    | `"Hi" "World! Quantok 🚀"` (2, split at `,`)                             |
-| sentence | Sentence  | boulder  | `"Hi, World!" "Quantok 🚀"` (2, split at `!`)                            |
+| token    | BPE       | stone    | `"Hi" "," " World" "," " Quant" "ok"` + 3 sub-byte chunks for `🚀` (9)    |
+| word     | Word      | brick    | `"Hi," "World," "Quantok" "🚀"` (4)                                      |
+| phrase   | Phrase    | block    | `"Hi" "World" "Quantok 🚀"` (3, split at each `,`)                       |
+| sentence | Sentence  | boulder  | `"Hi, World, Quantok 🚀"` (1, no terminal `.!?`)                         |
 
 Smaller chunks = lighter, more numerous. Larger chunks = heavier, fewer. A sentence-boulder behaves very differently from a stream of bit-sand.
 
-Tokens have two forms. The `token` encoding above is the **text chunk** form — what the BPE chunker emits and what `splitter` produces from a `word`. There is also a `token_id` encoding — the **numeric ID** form (`13347 11 4435 0 32541 564 11410 248 222` for the example above) — produced only by the **tiktoken transformer**. Visually they are distinct colors (mint green vs gold) so the two representations don't blur. Splitting a `token_id` chunks its digit string into runes.
+Tokens have two forms. The `token` encoding above is the **text chunk** form — what the BPE chunker emits and what `splitter` produces from a `word`. There is also a `token_id` encoding — the **numeric ID** form (`13347 11 4435 11 32541 564 11410 248 222` for the example above) — produced only by the **tiktoken transformer**. Visually they are distinct colors (mint green vs gold) so the two representations don't blur. Splitting a `token_id` chunks its digit string into runes.
 
 ## Tokene Decay
 

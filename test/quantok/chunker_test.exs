@@ -199,8 +199,8 @@ defmodule Quantok.ChunkerTest do
   # The README "Chunking" table is hand-rolled; this pins each row to the
   # actual chunker output so the docs can't silently drift. If a chunker
   # changes shape, update both this test and the table together.
-  describe "README example: \"Hi, World! Quantok 🚀\"" do
-    @readme_example "Hi, World! Quantok 🚀"
+  describe "README example: \"Hi, World, Quantok 🚀\"" do
+    @readme_example "Hi, World, Quantok 🚀"
 
     test "bit count is 184 (8 bits × 23 bytes)" do
       assert length(Quantok.Chunker.Bit.chunk(@readme_example)) == 184
@@ -218,27 +218,27 @@ defmodule Quantok.ChunkerTest do
       alias Quantok.Chunker.BPE
       chunks = BPE.chunk(@readme_example)
       assert length(chunks) == 9
-      assert ["Hi", ",", " World", "!", " Quant", "ok" | _emoji_bytes] = chunks
+      assert ["Hi", ",", " World", ",", " Quant", "ok" | _emoji_bytes] = chunks
     end
 
     test "word splits at whitespace, keeps punctuation attached" do
       assert Quantok.Chunker.Word.chunk(@readme_example) ==
-               ["Hi,", "World!", "Quantok", "🚀"]
+               ["Hi,", "World,", "Quantok", "🚀"]
     end
 
-    test "phrase splits at `,` (not sentence punctuation)" do
+    test "phrase splits at each `,` — produces 3 chunks" do
       assert Quantok.Chunker.Phrase.chunk(@readme_example) ==
-               ["Hi", "World! Quantok 🚀"]
+               ["Hi", "World", "Quantok 🚀"]
     end
 
-    test "sentence splits at `!` (not phrase punctuation)" do
+    test "sentence stays whole — 1 chunk (no terminal .!?)" do
       assert Quantok.Chunker.Sentence.chunk(@readme_example) ==
-               ["Hi, World!", "Quantok 🚀"]
+               ["Hi, World, Quantok 🚀"]
     end
 
     test "tiktoken transformer produces the IDs the README quotes" do
       assert Tiktokenex.encode(@readme_example) ==
-               [13_347, 11, 4435, 0, 32_541, 564, 11_410, 248, 222]
+               [13_347, 11, 4435, 11, 32_541, 564, 11_410, 248, 222]
     end
   end
 end
