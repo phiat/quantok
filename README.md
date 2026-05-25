@@ -5,6 +5,8 @@
 
 A physics sandbox where data chunks are physical objects.
 
+![Quantok demo](docs/quantok-demo.gif)
+
 Emitters produce **tokenes** from commands and data. Tokenes fall through a 2D world affected by gravity, collide with surfaces, pass through transformers, and land in collectors that trigger actions. The chunking granularity — bits, bytes, runes, BPE tokens, words, phrases, sentences — determines a tokene's mass, size, and physical behavior.
 
 | | |
