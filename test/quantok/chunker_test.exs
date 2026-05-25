@@ -195,4 +195,50 @@ defmodule Quantok.ChunkerTest do
       end
     end
   end
+
+  # The README "Chunking" table is hand-rolled; this pins each row to the
+  # actual chunker output so the docs can't silently drift. If a chunker
+  # changes shape, update both this test and the table together.
+  describe "README example: \"Hi, World! Quantok 🚀\"" do
+    @readme_example "Hi, World! Quantok 🚀"
+
+    test "bit count is 184 (8 bits × 23 bytes)" do
+      assert length(Quantok.Chunker.Bit.chunk(@readme_example)) == 184
+    end
+
+    test "byte count is 23" do
+      assert length(Quantok.Chunker.Byte.chunk(@readme_example)) == 23
+    end
+
+    test "rune count is 20 (one rune per emoji, not 4 bytes)" do
+      assert length(Quantok.Chunker.Rune.chunk(@readme_example)) == 20
+    end
+
+    test "BPE produces 9 chunks (the emoji splits into 3 sub-byte chunks)" do
+      alias Quantok.Chunker.BPE
+      chunks = BPE.chunk(@readme_example)
+      assert length(chunks) == 9
+      assert ["Hi", ",", " World", "!", " Quant", "ok" | _emoji_bytes] = chunks
+    end
+
+    test "word splits at whitespace, keeps punctuation attached" do
+      assert Quantok.Chunker.Word.chunk(@readme_example) ==
+               ["Hi,", "World!", "Quantok", "🚀"]
+    end
+
+    test "phrase splits at `,` (not sentence punctuation)" do
+      assert Quantok.Chunker.Phrase.chunk(@readme_example) ==
+               ["Hi", "World! Quantok 🚀"]
+    end
+
+    test "sentence splits at `!` (not phrase punctuation)" do
+      assert Quantok.Chunker.Sentence.chunk(@readme_example) ==
+               ["Hi, World!", "Quantok 🚀"]
+    end
+
+    test "tiktoken transformer produces the IDs the README quotes" do
+      assert Tiktokenex.encode(@readme_example) ==
+               [13_347, 11, 4435, 0, 32_541, 564, 11_410, 248, 222]
+    end
+  end
 end
