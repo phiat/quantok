@@ -107,7 +107,9 @@ defmodule Quantok.Node.Emitter do
   Returns an updated node so the world genserver can swap it into state.
   """
   @spec after_fire(Node.t()) :: Node.t()
-  def after_fire(%Node{type: :emitter, config: %{source: __MODULE__.Emoji, command: cmd} = config} = node) do
+  def after_fire(
+        %Node{type: :emitter, config: %{source: __MODULE__.Emoji, command: cmd} = config} = node
+      ) do
     case __MODULE__.Emoji.count(cmd) do
       0 ->
         node
