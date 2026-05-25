@@ -68,8 +68,8 @@ The core mechanic. The same data chunked at different granularities produces tok
 | rune     | Rune      | pebble   | `"H" "i" " " "W" "o" "r" "l" "d" "!" " " "Q" "u" …` (17)  |
 | token    | BPE       | stone    | `"Hi" " World" "!" " Quant" "ok"` (5)                     |
 | word     | Word      | brick    | `"Hi" "World!" "Quantok"` (3)                             |
-| phrase   | Phrase    | block    | `"Hi World! Quantok"` (1)                                 |
-| sentence | Sentence  | boulder  | `"Hi World!" "Quantok"` (2)                               |
+| phrase   | Phrase    | block    | `"Hi World!" "Quantok"` (2)                               |
+| sentence | Sentence  | boulder  | `"Hi World! Quantok"` (1)                                 |
 
 Smaller chunks = lighter, more numerous. Larger chunks = heavier, fewer. A sentence-boulder behaves very differently from a stream of bit-sand.
 
