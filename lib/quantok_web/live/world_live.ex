@@ -550,6 +550,9 @@ defmodule QuantokWeb.WorldLive do
       "width" ->
         %{config | width: parse_float(params["val"], config.width)}
 
+      "height" ->
+        %{config | height: parse_float(params["val"], config.height)}
+
       "angle" ->
         %{config | angle: parse_float(params["val"], config.angle)}
 

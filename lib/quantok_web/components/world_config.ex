@@ -315,14 +315,14 @@ defmodule QuantokWeb.WorldConfig do
         </button>
       </div>
 
-      <label class="q-cfg-label">width</label>
+      <label class="q-cfg-label">size</label>
       <div class="q-cfg-btns">
         <button
           :for={w <- [100, 200, 400, 800]}
           phx-click="update_node_config"
-          phx-value-field="width"
+          phx-value-field={size_field(@config.shape)}
           phx-value-val={w}
-          class={"q-cfg-btn" <> if(round(@config.width) == w, do: " q-cfg-btn--active", else: "")}
+          class={"q-cfg-btn" <> if(round(size_value(@config)) == w, do: " q-cfg-btn--active", else: "")}
         >
           {w}
         </button>
@@ -394,6 +394,15 @@ defmodule QuantokWeb.WorldConfig do
 
   defp angle_active?(current, target) when is_number(current), do: abs(current - target) < 0.01
   defp angle_active?(_, _), do: false
+
+  # A wall's primary axis is vertical, so "size" maps to :height; everything
+  # else (floor, ramp, conveyor, portal) is a horizontal element where "size"
+  # maps to :width. Keeps the UI label consistent across shapes.
+  defp size_field(:wall), do: "height"
+  defp size_field(_), do: "width"
+
+  defp size_value(%{shape: :wall, height: h}), do: h
+  defp size_value(%{width: w}), do: w
 
   defp module_label(nil), do: ""
   # BPE is exposed as "token" in the UI; canonical encoding name is :token.

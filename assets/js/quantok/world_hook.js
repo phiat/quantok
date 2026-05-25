@@ -189,11 +189,15 @@ const WorldCanvas = {
       // Use moveBody so passives (static) move too, not just kinematic nodes
       this.physics.moveBody(this._drag.nodeId, nx, -ny);
       // Per-feature caches that hold a node's physics-space position need to
-      // be kept in sync, otherwise force fields keep pointing at the old spot.
+      // be kept in sync, otherwise force fields keep pointing at the old spot
+      // and a config-rebuild teleports the node back to where it was first
+      // installed.
       const conv = this.conveyors.get(this._drag.nodeId);
       if (conv) { conv.x = nx; conv.y = -ny; }
       const mag = this.magnets.get(this._drag.nodeId);
       if (mag) { mag.x = nx; mag.y = -ny; }
+      const nd = this.nodeData.get(this._drag.nodeId);
+      if (nd) { nd.position_x = nx; nd.position_y = -ny; }
       return;
     }
     // Hover detection
