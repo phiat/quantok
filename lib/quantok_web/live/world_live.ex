@@ -1,11 +1,12 @@
 defmodule QuantokWeb.WorldLive do
   use QuantokWeb, :live_view
 
-  alias Quantok.Node.{Collector, Emitter, Passive, Transformer}
+  alias Quantok.Node.{Collector, Emitter, Passive}
   alias Quantok.Tokene
   alias Quantok.World
   alias Quantok.World.Snapshot
   alias QuantokWeb.{WorldConfig, WorldSidebar}
+  alias QuantokWeb.WorldSidebar.Actions, as: SidebarActions
 
   @impl true
   def mount(_params, _session, socket) do
@@ -57,9 +58,9 @@ defmodule QuantokWeb.WorldLive do
       |> assign(:selected_node, nil)
       |> assign(:template_node, nil)
       |> assign(:next_x, 0)
-      |> push_node(floor)
-      |> push_node(emitter)
-      |> push_node(collector)
+      |> SidebarActions.push_node(floor)
+      |> SidebarActions.push_node(emitter)
+      |> SidebarActions.push_node(collector)
       |> push_event("set_decay", %{enabled: true, rate: 1.0})
 
     # Start physics tick timer (~30 ticks/sec)
@@ -171,202 +172,31 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_event("set_decay_shatter", %{"shatter" => shatter}, socket) do
-    shatter_atom = shatter_atom(shatter)
+    shatter_atom = SidebarActions.shatter_atom(shatter)
     World.set_decay(socket.assigns.world_pid, %{shatter: shatter_atom})
     {:noreply, assign(socket, :decay_shatter, shatter_atom)}
   end
 
-  def handle_event("add_source_emitter", params, socket) do
-    # Drop unknown sources silently.
-    case source_module(params["source"]) do
-      nil ->
-        {:noreply, socket}
+  def handle_event("add_source_emitter", params, socket),
+    do: {:noreply, SidebarActions.add_source_emitter(socket, params)}
 
-      source_mod ->
-        chunker_mod = chunker_module(params["chunker"] || "word")
-        command = params["command"] || ""
-        {x, socket} = next_x(socket, -300.0)
+  def handle_event("add_collector", params, socket),
+    do: {:noreply, SidebarActions.add_collector(socket, params)}
 
-        emitter =
-          Emitter.new(
-            source: source_mod,
-            command: command,
-            chunker: chunker_mod,
-            position: {x, -300.0},
-            label: params["source"]
-          )
+  def handle_event("add_typed_collector", params, socket),
+    do: {:noreply, SidebarActions.add_typed_collector(socket, params)}
 
-        {:ok, _} = World.add_node(socket.assigns.world_pid, emitter)
+  def handle_event("add_timed_collector", params, socket),
+    do: {:noreply, SidebarActions.add_timed_collector(socket, params)}
 
-        {:noreply,
-         socket
-         |> push_node(emitter)
-         |> update(:node_count, &(&1 + 1))
-         |> assign(:selected_node, emitter)}
-    end
-  end
+  def handle_event("add_emit_collector", params, socket),
+    do: {:noreply, SidebarActions.add_emit_collector(socket, params)}
 
-  def handle_event("add_collector", %{"capacity" => cap_str}, socket) do
-    capacity = String.to_integer(cap_str)
-    {x, socket} = next_x(socket, 250.0)
-    collector = Collector.new(capacity: capacity, position: {x, 250.0}, label: "Collector")
-    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
+  def handle_event("add_transformer", params, socket),
+    do: {:noreply, SidebarActions.add_transformer(socket, params)}
 
-    {:noreply,
-     socket
-     |> push_node(collector)
-     |> update(:node_count, &(&1 + 1))
-     |> assign(:selected_node, collector)}
-  end
-
-  def handle_event("add_typed_collector", %{"action" => action, "capacity" => cap_str}, socket) do
-    capacity = String.to_integer(cap_str)
-    action_mod = collector_action(action)
-    {x, socket} = next_x(socket, 250.0)
-    label = String.capitalize(action)
-
-    collector =
-      Collector.new(
-        capacity: capacity,
-        action: action_mod,
-        emit: true,
-        output_chunker: Quantok.Chunker.Byte,
-        position: {x, 250.0},
-        label: label
-      )
-
-    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
-
-    {:noreply,
-     socket
-     |> push_node(collector)
-     |> update(:node_count, &(&1 + 1))
-     |> assign(:selected_node, collector)}
-  end
-
-  def handle_event("add_timed_collector", %{"capacity" => cap_str, "interval" => int_str}, socket) do
-    capacity = String.to_integer(cap_str)
-    interval = String.to_integer(int_str)
-    {x, socket} = next_x(socket, 250.0)
-
-    collector =
-      Collector.new(
-        capacity: capacity,
-        trigger_mode: :timed,
-        tick_interval: interval,
-        emit: true,
-        output_chunker: Quantok.Chunker.Byte,
-        position: {x, 250.0},
-        label: "Timed"
-      )
-
-    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
-
-    {:noreply,
-     socket
-     |> push_node(collector)
-     |> update(:node_count, &(&1 + 1))
-     |> assign(:selected_node, collector)}
-  end
-
-  def handle_event(
-        "add_emit_collector",
-        %{"action" => action, "capacity" => cap_str, "chunker" => chunker},
-        socket
-      ) do
-    capacity = String.to_integer(cap_str)
-    action_mod = collector_action(action)
-    chunker_mod = chunker_module(chunker)
-    {x, socket} = next_x(socket, 250.0)
-    label = String.capitalize(action) <> " emit"
-
-    collector =
-      Collector.new(
-        capacity: capacity,
-        action: action_mod,
-        emit: true,
-        output_chunker: chunker_mod,
-        position: {x, 250.0},
-        label: label
-      )
-
-    {:ok, _} = World.add_node(socket.assigns.world_pid, collector)
-
-    {:noreply,
-     socket
-     |> push_node(collector)
-     |> update(:node_count, &(&1 + 1))
-     |> assign(:selected_node, collector)}
-  end
-
-  def handle_event("add_transformer", %{"effect" => effect}, socket) do
-    case effect_atom(effect) do
-      nil ->
-        {:noreply, socket}
-
-      effect_atom ->
-        {x, socket} = next_x(socket, 0.0)
-        transformer = Transformer.new(effect_atom, position: {x, 0.0}, radius: 60.0)
-        {:ok, _} = World.add_node(socket.assigns.world_pid, transformer)
-
-        {:noreply,
-         socket
-         |> push_node(transformer)
-         |> update(:node_count, &(&1 + 1))
-         |> assign(:selected_node, transformer)}
-    end
-  end
-
-  def handle_event("add_passive", %{"shape" => "portal"}, socket) do
-    world = World.get_state(socket.assigns.world_pid)
-
-    used =
-      world.nodes
-      |> Map.values()
-      |> Enum.filter(&(&1.type == :passive and &1.config.shape == :portal))
-      |> Enum.map(& &1.config.channel)
-      |> MapSet.new()
-
-    case Enum.find(~w(A B C D E F), &(not MapSet.member?(used, &1))) do
-      nil ->
-        # All six channels already in use — silently no-op.
-        {:noreply, socket}
-
-      channel ->
-        {x1, socket} = next_x(socket, 100.0)
-        portal1 = Passive.new(:portal, channel: channel, position: {x1, 100.0})
-        {:ok, _} = World.add_node(socket.assigns.world_pid, portal1)
-
-        {x2, socket} = next_x(socket, 100.0)
-        portal2 = Passive.new(:portal, channel: channel, position: {x2, 100.0})
-        {:ok, _} = World.add_node(socket.assigns.world_pid, portal2)
-
-        {:noreply,
-         socket
-         |> push_node(portal1)
-         |> push_node(portal2)
-         |> update(:node_count, &(&1 + 2))
-         |> assign(:selected_node, portal2)}
-    end
-  end
-
-  def handle_event("add_passive", %{"shape" => shape} = params, socket) do
-    case shape_atom(shape) do
-      nil ->
-        {:noreply, socket}
-
-      shape_atom ->
-        {x, socket} = next_x(socket, 100.0)
-        passive = Passive.new(shape_atom, passive_opts(shape_atom, params, x))
-        {:ok, _} = World.add_node(socket.assigns.world_pid, passive)
-
-        {:noreply,
-         socket
-         |> push_node(passive)
-         |> update(:node_count, &(&1 + 1))
-         |> assign(:selected_node, passive)}
-    end
-  end
+  def handle_event("add_passive", params, socket),
+    do: {:noreply, SidebarActions.add_passive(socket, params)}
 
   def handle_event("fire_all", _params, socket) do
     World.fire_all_emitters(socket.assigns.world_pid)
@@ -481,8 +311,24 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_event("rotate_passive", %{"node_id" => id}, socket) do
-    World.rotate_passive(socket.assigns.world_pid, id)
-    {:noreply, socket}
+    case World.rotate_passive(socket.assigns.world_pid, id) do
+      {:ok, _new_angle} ->
+        # Fetch the updated node and reuse the same client-rebuild path the
+        # config panel uses so the rotation is reflected visually.
+        world = World.get_state(socket.assigns.world_pid)
+        node = Map.get(world.nodes, id)
+        socket = maybe_push_config_update(socket, node)
+
+        socket =
+          if socket.assigns.selected_node && socket.assigns.selected_node.id == id,
+            do: assign(socket, :selected_node, node),
+            else: socket
+
+        {:noreply, socket}
+
+      _ ->
+        {:noreply, socket}
+    end
   end
 
   def handle_event("select_node", %{"node_id" => id}, socket) do
@@ -506,7 +352,7 @@ defmodule QuantokWeb.WorldLive do
   end
 
   def handle_event("preview_template", %{"kind" => kind} = params, socket) do
-    case build_template(kind, params) do
+    case SidebarActions.build_template(kind, params) do
       nil ->
         {:noreply, socket}
 
@@ -522,16 +368,13 @@ defmodule QuantokWeb.WorldLive do
 
       template ->
         {_px, py} = template.position
-        {x, socket} = next_x(socket, py)
+        {x, socket} = SidebarActions.next_x(socket, py)
         node = %{template | position: {x, py}}
-        {:ok, _} = World.add_node(socket.assigns.world_pid, node)
 
         {:noreply,
          socket
-         |> push_node(node)
-         |> update(:node_count, &(&1 + 1))
-         |> assign(:template_node, nil)
-         |> assign(:selected_node, node)}
+         |> SidebarActions.add_and_select(node)
+         |> assign(:template_node, nil)}
     end
   end
 
@@ -548,6 +391,8 @@ defmodule QuantokWeb.WorldLive do
 
         {:ok, updated} =
           World.update_node(socket.assigns.world_pid, node.id, %{config: updated_config})
+
+        socket = maybe_push_config_update(socket, updated)
 
         {:noreply, assign(socket, :selected_node, updated)}
 
@@ -579,26 +424,7 @@ defmodule QuantokWeb.WorldLive do
   @impl true
   def handle_info({:emit, emitter_id, tokenes, rate}, socket) do
     tokene_data =
-      Enum.map(tokenes, fn t ->
-        {w, h} = Tokene.dimensions(t)
-
-        %{
-          id: t.id,
-          value: t.value,
-          encoding: to_string(t.encoding),
-          width: w,
-          height: h,
-          mass: Tokene.mass(t),
-          integrity: t.integrity,
-          emit_rate: rate,
-          created_at: t.created_at,
-          decay: %{
-            enabled: t.decay.enabled,
-            half_life: if(t.decay.half_life == :infinite, do: 0, else: t.decay.half_life),
-            shatter: to_string(t.decay.shatter)
-          }
-        }
-      end)
+      Enum.map(tokenes, &tokene_to_wire(&1, %{emit_rate: rate, created_at: &1.created_at}))
 
     socket =
       socket
@@ -648,32 +474,15 @@ defmodule QuantokWeb.WorldLive do
   def handle_info({:node_removed, _id}, socket), do: {:noreply, socket}
   def handle_info({:node_updated, _node}, socket), do: {:noreply, socket}
 
-  def handle_info({:transform, _transformer_id, old_tokene_id, result_tokenes}, socket) do
-    new_tokene_data =
-      Enum.map(result_tokenes, fn t ->
-        {w, h} = Tokene.dimensions(t)
-
-        %{
-          id: t.id,
-          value: t.value,
-          encoding: to_string(t.encoding),
-          width: w,
-          height: h,
-          mass: Tokene.mass(t),
-          integrity: t.integrity,
-          decay: %{
-            enabled: t.decay.enabled,
-            half_life: if(t.decay.half_life == :infinite, do: 0, else: t.decay.half_life),
-            shatter: to_string(t.decay.shatter)
-          }
-        }
-      end)
+  def handle_info({:transform, transformer_id, old_tokene_id, result_tokenes}, socket) do
+    new_tokene_data = Enum.map(result_tokenes, &tokene_to_wire/1)
 
     count_delta = length(result_tokenes) - 1
 
     socket =
       socket
       |> push_event("transform_tokene", %{
+        transformer_id: transformer_id,
         old_tokene_id: old_tokene_id,
         new_tokenes: new_tokene_data
       })
@@ -706,7 +515,7 @@ defmodule QuantokWeb.WorldLive do
     |> assign(:decay_rate, rate)
     |> assign(:decay_shatter, Map.get(decay, :shatter, :split))
     |> then(fn s ->
-      Enum.reduce(Map.values(loaded_world.nodes), s, &push_node(&2, &1))
+      Enum.reduce(Map.values(loaded_world.nodes), s, &SidebarActions.push_node(&2, &1))
     end)
   end
 
@@ -714,86 +523,12 @@ defmodule QuantokWeb.WorldLive do
     socket |> assign(:selected_node, nil) |> assign(:template_node, nil)
   end
 
-  # --- Template builders (preview before commit) ---
-
-  defp build_template("source_emitter", params) do
-    case source_module(params["source"]) do
-      nil ->
-        nil
-
-      source_mod ->
-        Emitter.new(
-          source: source_mod,
-          command: params["command"] || "",
-          chunker: chunker_module(params["chunker"] || "word"),
-          position: {0.0, -300.0},
-          label: params["source"]
-        )
-    end
-  end
-
-  defp build_template("collector", %{"capacity" => cap}) do
-    Collector.new(
-      capacity: parse_int(cap, 8),
-      position: {0.0, 250.0},
-      label: "Collector"
-    )
-  end
-
-  defp build_template("typed_collector", %{"action" => action, "capacity" => cap}) do
-    Collector.new(
-      capacity: parse_int(cap, 8),
-      action: collector_action(action),
-      emit: true,
-      output_chunker: Quantok.Chunker.Byte,
-      position: {0.0, 250.0},
-      label: String.capitalize(action)
-    )
-  end
-
-  defp build_template("timed_collector", %{"capacity" => cap, "interval" => int}) do
-    Collector.new(
-      capacity: parse_int(cap, 8),
-      trigger_mode: :timed,
-      tick_interval: parse_int(int, 120),
-      emit: true,
-      output_chunker: Quantok.Chunker.Byte,
-      position: {0.0, 250.0},
-      label: "Timed"
-    )
-  end
-
-  defp build_template("emit_collector", %{"action" => action, "capacity" => cap, "chunker" => ch}) do
-    Collector.new(
-      capacity: parse_int(cap, 4),
-      action: collector_action(action),
-      emit: true,
-      output_chunker: chunker_module(ch),
-      position: {0.0, 250.0},
-      label: String.capitalize(action) <> " emit"
-    )
-  end
-
-  defp build_template("transformer", %{"effect" => effect}) do
-    case effect_atom(effect) do
-      nil -> nil
-      atom -> Transformer.new(atom, position: {0.0, 0.0}, radius: 60.0)
-    end
-  end
-
-  defp build_template("passive", %{"shape" => shape} = params) do
-    case shape_atom(shape) do
-      nil -> nil
-      atom -> Passive.new(atom, passive_opts(atom, params, 0.0))
-    end
-  end
-
-  defp build_template(_, _), do: nil
+  # --- Config-panel updates ---
 
   defp apply_config_changes(%{type: :emitter, config: config}, params) do
     case params["field"] do
       "command" -> %{config | command: params["val"] || config.command}
-      "chunker" -> %{config | chunker: chunker_module(params["val"])}
+      "chunker" -> %{config | chunker: SidebarActions.chunker_module(params["val"])}
       "emit_rate" -> %{config | emit_rate: parse_int(params["val"], config.emit_rate)}
       _ -> config
     end
@@ -804,24 +539,62 @@ defmodule QuantokWeb.WorldLive do
   end
 
   defp apply_config_changes(%{type: :transformer, config: config}, params) do
-    case params["field"] do
-      "effect" -> %{config | effect: effect_atom(params["val"]) || config.effect}
-      "radius" -> %{config | radius: parse_float(params["val"], config.radius)}
-      _ -> config
-    end
+    update_transformer_field(config, params["field"], params["val"])
   end
 
   defp apply_config_changes(%{type: :passive, config: config}, params) do
     case params["field"] do
-      "shape" -> %{config | shape: shape_atom(params["val"]) || config.shape}
-      "width" -> %{config | width: parse_float(params["val"], config.width)}
-      "speed" -> %{config | speed: parse_float(params["val"], config.speed)}
-      "channel" -> %{config | channel: params["val"] |> to_string() |> String.slice(0, 8)}
-      _ -> config
+      "shape" ->
+        %{config | shape: SidebarActions.shape_atom(params["val"]) || config.shape}
+
+      "width" ->
+        %{config | width: parse_float(params["val"], config.width)}
+
+      "angle" ->
+        %{config | angle: parse_float(params["val"], config.angle)}
+
+      "speed" ->
+        %{config | speed: parse_float(params["val"], config.speed)}
+
+      "channel" ->
+        %{config | channel: params["val"] |> to_string() |> String.slice(0, 8)}
+
+      _ ->
+        config
     end
   end
 
   defp apply_config_changes(%{config: config}, _params), do: config
+
+  defp update_transformer_field(config, "effect", val),
+    do: %{config | effect: SidebarActions.effect_atom(val) || config.effect}
+
+  defp update_transformer_field(config, "radius", val),
+    do: %{config | radius: parse_float(val, config.radius)}
+
+  defp update_transformer_field(config, "strength", val),
+    do: %{config | strength: parse_float(val, config.strength)}
+
+  defp update_transformer_field(config, "polarity", val),
+    do: %{config | polarity: SidebarActions.polarity_atom(val) || config.polarity}
+
+  defp update_transformer_field(config, "target_encoding", val) do
+    case val do
+      v when v in [nil, "", "any"] ->
+        %{config | target_encoding: nil}
+
+      v ->
+        %{config | target_encoding: SidebarActions.encoding_atom(v) || config.target_encoding}
+    end
+  end
+
+  defp update_transformer_field(config, "pattern", val) do
+    pattern = val || ""
+    compiled = if pattern == "", do: nil, else: SidebarActions.compile_regex(pattern)
+    %{config | pattern: pattern, compiled_pattern: compiled}
+  end
+
+  defp update_transformer_field(config, _field, _val), do: config
 
   defp apply_collector_field(config, "capacity", val),
     do: %{config | capacity: parse_int(val, config.capacity)}
@@ -829,10 +602,11 @@ defmodule QuantokWeb.WorldLive do
   defp apply_collector_field(config, "trigger_mode", val),
     do: %{config | trigger_mode: safe_trigger_mode(val)}
 
-  defp apply_collector_field(config, "action", val), do: %{config | action: collector_action(val)}
+  defp apply_collector_field(config, "action", val),
+    do: %{config | action: SidebarActions.collector_action(val)}
 
   defp apply_collector_field(config, "output_chunker", val),
-    do: %{config | output_chunker: chunker_module(val)}
+    do: %{config | output_chunker: SidebarActions.chunker_module(val)}
 
   defp apply_collector_field(config, "emit_rate", val),
     do: %{config | emit_rate: parse_int(val, config.emit_rate)}
@@ -897,12 +671,16 @@ defmodule QuantokWeb.WorldLive do
     })
   end
 
-  defp serialize_fragment(t) do
+  defp serialize_fragment(t), do: tokene_to_wire(t)
+
+  # The single source of truth for the tokene payload pushed to the client.
+  # Emit adds :emit_rate and :created_at; transform/fragment omit them.
+  defp tokene_to_wire(t, extras \\ %{}) do
     {w, h} = Tokene.dimensions(t)
 
     %{
       id: t.id,
-      value: t.value,
+      value: Tokene.display_value(t),
       encoding: to_string(t.encoding),
       width: w,
       height: h,
@@ -914,152 +692,38 @@ defmodule QuantokWeb.WorldLive do
         shatter: to_string(t.decay.shatter)
       }
     }
+    |> Map.merge(extras)
   end
 
-  defp push_node(socket, node) do
-    {px, py} = node.position
+  # Magnets compute forces client-side from cached state, so config edits
+  # (polarity/pattern/encoding/radius/strength) must be pushed so the client
+  # can re-register the magnet entry.
+  # Transformer + passive config changes have to round-trip: radius drives the
+  # transformer's visible body + sensor zone; width / shape / speed / channel
+  # drive a passive's collider and rendered geometry. The client tears down and
+  # rebuilds physics + mesh under the same id.
+  defp maybe_push_config_update(socket, %{type: type} = node)
+       when type in [:transformer, :passive, :collector] do
+    payload = %{
+      node_id: node.id,
+      width: SidebarActions.node_width(node),
+      height: SidebarActions.node_height(node),
+      config: SidebarActions.serialize_config(node.config)
+    }
 
-    push_event(socket, "add_node", %{
-      node: %{
-        id: node.id,
-        type: to_string(node.type),
-        label: node.label,
-        position_x: px,
-        position_y: py,
-        width: node_width(node),
-        height: node_height(node),
-        config: serialize_config(node.config)
-      }
-    })
+    # A collector rebuild clears the rendered buffer-slot fills (paint lives on
+    # the client). Re-send the current buffer so the slots repaint immediately
+    # after the new mesh is installed — otherwise mid-fill collectors look
+    # empty until the next absorb event.
+    payload =
+      if type == :collector,
+        do: Map.put(payload, :buffer, get_buffer_data(socket.assigns.world_pid, node.id)),
+        else: payload
+
+    push_event(socket, "update_node_config", payload)
   end
 
-  defp node_width(%{type: :passive, config: %{width: w}}), do: w
-  defp node_width(%{type: :collector, config: %{capacity: cap}}), do: max(cap * 12, 80)
-  defp node_width(%{type: :transformer, config: %{radius: r}}), do: r * 2
-  defp node_width(_), do: 80.0
-
-  defp node_height(%{type: :passive, config: %{height: h}}), do: h
-  defp node_height(%{type: :transformer, config: %{radius: r}}), do: r * 2
-  defp node_height(_), do: 40.0
-
-  defp serialize_config(config) when is_map(config) do
-    config
-    |> Map.take([
-      :capacity,
-      :shape,
-      :angle,
-      :friction,
-      :restitution,
-      :strength,
-      :radius,
-      :effect,
-      :sensor_radius,
-      :trigger_mode,
-      :emit,
-      :tick_interval,
-      :speed,
-      :channel
-    ])
-    |> Map.new(fn {k, v} -> {to_string(k), serialize_value(v)} end)
-  end
-
-  defp serialize_value(v) when is_atom(v), do: to_string(v)
-  defp serialize_value(v), do: v
-
-  defp passive_opts(:conveyor, params, x) do
-    speed = parse_float(params["speed"] || "80", 80.0)
-    [position: {x, 100.0}, speed: speed]
-  end
-
-  defp passive_opts(:portal, params, x) do
-    channel = (params["channel"] || "A") |> to_string() |> String.slice(0, 8)
-    [position: {x, 100.0}, channel: channel]
-  end
-
-  defp passive_opts(_shape, _params, x), do: [position: {x, 100.0}]
-
-  defp effect_atom("splitter"), do: :splitter
-  defp effect_atom("crusher"), do: :crusher
-  defp effect_atom("heater"), do: :heater
-  defp effect_atom("cooler"), do: :cooler
-  defp effect_atom("filter"), do: :filter
-  defp effect_atom("duplicator"), do: :duplicator
-  defp effect_atom("painter"), do: :painter
-  defp effect_atom("tiktoken"), do: :tiktoken
-  defp effect_atom(_), do: nil
-
-  defp shape_atom("floor"), do: :floor
-  defp shape_atom("wall"), do: :wall
-  defp shape_atom("ramp"), do: :ramp
-  defp shape_atom("funnel"), do: :funnel
-  defp shape_atom("attractor"), do: :attractor
-  defp shape_atom("repeller"), do: :repeller
-  defp shape_atom("conveyor"), do: :conveyor
-  defp shape_atom("portal"), do: :portal
-  defp shape_atom(_), do: nil
-
-  defp source_module("clock"), do: Quantok.Node.Emitter.Clock
-  defp source_module("file"), do: Quantok.Node.Emitter.File
-  defp source_module("manual"), do: Quantok.Node.Emitter.Manual
-  defp source_module("sequence"), do: Quantok.Node.Emitter.Sequence
-  defp source_module("random"), do: Quantok.Node.Emitter.Random
-  defp source_module("shell"), do: Quantok.Node.Emitter.Shell
-  defp source_module(_), do: nil
-
-  defp collector_action("echo"), do: Quantok.Node.Collector.Echo
-  defp collector_action("shell"), do: Quantok.Node.Collector.Shell
-  defp collector_action("reverse"), do: Quantok.Node.Collector.Reverse
-  defp collector_action("upcase"), do: Quantok.Node.Collector.Upcase
-  defp collector_action("count"), do: Quantok.Node.Collector.Count
-  defp collector_action("display"), do: Quantok.Node.Collector.Display
-  defp collector_action("hash"), do: Quantok.Node.Collector.Hash
-  defp collector_action("sum"), do: Quantok.Node.Collector.Sum
-  defp collector_action("min"), do: Quantok.Node.Collector.Min
-  defp collector_action("max"), do: Quantok.Node.Collector.Max
-  defp collector_action(_), do: Quantok.Node.Collector.Echo
-
-  defp shatter_atom("split"), do: :split
-  defp shatter_atom("dissolve"), do: :dissolve
-  defp shatter_atom("explode"), do: :explode
-  defp shatter_atom("fossilize"), do: :fossilize
-  defp shatter_atom(_), do: :split
-
-  defp chunker_module("bit"), do: Quantok.Chunker.Bit
-  defp chunker_module("byte"), do: Quantok.Chunker.Byte
-  defp chunker_module("rune"), do: Quantok.Chunker.Rune
-  defp chunker_module("token"), do: Quantok.Chunker.BPE
-  defp chunker_module("word"), do: Quantok.Chunker.Word
-  defp chunker_module("phrase"), do: Quantok.Chunker.Phrase
-  defp chunker_module("sentence"), do: Quantok.Chunker.Sentence
-  defp chunker_module(_), do: Quantok.Chunker.Word
-
-  # Pick the next x position that isn't already occupied. Walks the staggered
-  # sequence (0, -120, 120, -240, ...) and skips any slot near an existing
-  # node at roughly the same y row.
-  defp next_x(socket, y) do
-    world = World.get_state(socket.assigns.world_pid)
-    occupied = Enum.map(world.nodes, fn {_, n} -> n.position end)
-
-    x =
-      0
-      |> Stream.iterate(&(&1 + 1))
-      |> Stream.map(&staggered_x/1)
-      |> Stream.drop_while(fn cx -> overlaps?(occupied, cx, y) end)
-      |> Enum.at(0)
-
-    {x, assign(socket, :next_x, socket.assigns.next_x + 1)}
-  end
-
-  defp staggered_x(0), do: 0.0
-
-  defp staggered_x(n),
-    do: div(n + 1, 2) * 120.0 * if(rem(n, 2) == 1, do: -1, else: 1)
-
-  defp overlaps?(occupied, cx, y) do
-    Enum.any?(occupied, fn {ox, oy} ->
-      abs(ox - cx) < 80 and (is_nil(y) or abs(oy - y) < 100)
-    end)
-  end
+  defp maybe_push_config_update(socket, _node), do: socket
 
   defp saves_dir do
     Path.join(Application.app_dir(:quantok, "priv"), "worlds")
@@ -1087,7 +751,7 @@ defmodule QuantokWeb.WorldLive do
     case Map.get(world.nodes, collector_id) do
       %{type: :collector, config: %{buffer: buffer}} ->
         Enum.map(buffer, fn t ->
-          %{value: t.value, encoding: to_string(t.encoding)}
+          %{value: Tokene.display_value(t), encoding: to_string(t.encoding)}
         end)
 
       _ ->

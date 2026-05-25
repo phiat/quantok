@@ -40,12 +40,12 @@ Collector (8 slots) -> triggers action when full
 
 - **Emitters** execute a source (clock, sequence, manual text, random bytes, emoji, shell) and chunk the output
 - **Collectors** absorb tokenes into a buffer, trigger an action (echo, reverse, upcase, count, hash, shell, sum, min, max). Trigger modes: on-full, manual, or timed (physics-tick interval). Output modes: discard or emit (re-chunk output as new tokenes)
-- **Transformers** modify tokenes by proximity — split, crush, heat, cool, duplicate, **tiktoken** (encode any tokene into BPE token-IDs via the [tiktokenex](https://github.com/phiat/tiktokenex) library)
-- **Passives** are static geometry — floors, walls, ramps, funnels, conveyors (apply lateral surface velocity), **portals** (paired teleporters; tokenes entering one exit at any other portal on the same channel)
+- **Transformers** modify tokenes by proximity — split, crush, heat, cool, duplicate, **tiktoken** (encode any tokene into BPE token-IDs via the [tiktokenex](https://github.com/phiat/tiktokenex) library), **magnet** (continuous attract/repel force field with regex + encoding filters — selectively pull or push specific tokenes through the canvas)
+- **Passives** are static geometry — floors, walls, ramps (configurable angle for V-shapes and chutes), conveyors (apply lateral surface velocity), **portals** (paired teleporters; tokenes entering one exit at any other portal on the same channel)
 
 **Sidebar** (left): each row is a split button — click the **body** to preview the node-type in the config panel (right) before adding, or click **+** to drop it into the world immediately with defaults. Either way, the new node briefly highlights so you can spot it. Click any existing node on the canvas to load its config; click **×** in the config header to dismiss.
 
-Nodes are draggable. Hover over a node for contextual actions (fire, trigger, clear, rotate, delete). Scroll to zoom, shift+drag to pan.
+**Live config**: changes in the config panel (radius, angle, polarity, capacity, …) rebuild the node's mesh, physics body, and sensor zone in place — no page reload. Scroll to zoom, shift+drag to pan.
 
 ## Architecture
 

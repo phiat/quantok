@@ -5,104 +5,102 @@
 
 import { initRapier, PhysicsWorld } from "./physics";
 import { WorldRenderer } from "./renderer";
-import { OFFSCREEN_THRESHOLD } from "./utils";
+import {
+  TOKENE_CAP, HIGHLIGHT_MS, OFFSCREEN_THRESHOLD, FPS_INTERVAL_MS,
+  SHATTER_THRESHOLD, SENSOR_COOLDOWN_MS, MAGNET_DT,
+  CONVEYOR_COUPLING, CONVEYOR_CONTACT_BAND, PORTAL_EXIT_CLEARANCE,
+  BASE_HALF_LIFE,
+} from "./config";
 
-// Per-encoding base half-lives in ms — mirrors Quantok.Tokene.@base_half_life
-// on the server. Used so decay affects every tokene when toggled at runtime,
-// regardless of whether it was spawned with decay enabled. Bit is :infinite.
-const BASE_HALF_LIFE = {
-  sentence: 8_000,
-  phrase: 15_000,
-  word: 30_000,
-  token: 45_000,
-  token_id: 60_000,
-  ngram: 50_000,
-  rune: 60_000,
-  byte: 120_000,
-  bit: 0, // never decays
-};
+// LiveView events the server pushes to this hook. Listed once so adding a new
+// event is one line, and so the dispatch dance (queue events that arrive
+// before async init completes, then drain) covers everything by construction.
+const SERVER_EVENTS = [
+  "emit_tokenes", "absorb_tokene", "transform_tokene",
+  "add_node", "remove_node", "update_node_config",
+  "set_gravity", "set_decay",
+  "clear_tokenes", "clear_nodes",
+  "update_collector", "shatter_tokene",
+];
 
 const WorldCanvas = {
   async mounted() {
+    this._initState();
+    this._registerServerEvents();
+
+    // Async init — the event handlers above queue anything that arrives while
+    // we're waiting on WASM, so the early "add_node" pushes for default-world
+    // nodes don't get dropped.
+    this.rapier = await initRapier();
+    this.physics = new PhysicsWorld(this.rapier);
+    this.worldRenderer = new WorldRenderer(this.el);
+    this.running = true;
+
+    this._setupMouseHandlers();
+
+    // Drain anything that arrived during init
+    this._ready = true;
+    for (const [type, data] of this._eventQueue) this._handle(type, data);
+    this._eventQueue = [];
+
+    this.animate();
+  },
+
+  _initState() {
     this.tokeneData = new Map();
     this.nodeData = new Map();
     this.conveyors = new Map(); // id -> { x, y, hw, hh, angle, speed }
+    this.magnets = new Map();   // id -> { x, y, r, r2, strength, sign, regex, encoding }
     this.sensorCooldown = new Map();
     // Runtime decay state — overrides per-tokene decay.enabled so toggling
-    // affects existing tokenes, not just newly emitted ones
+    // affects existing tokenes, not just newly emitted ones.
     this.decayEnabled = false;
     this.decayRate = 1.0;
     this._pendingShatter = new Set();
     this._pendingTimeouts = [];
     this._ready = false;
     this._eventQueue = [];
-    // Performance: cap tokenes alive at once. When exceeded, oldest are
-    // evicted (FIFO by insertion order in tokeneData).
-    this.maxTokenes = 500;
-    // FPS tracking — re-query the element each tick since LiveView morphdom
-    // can swap it out when the header re-renders.
+    this.maxTokenes = TOKENE_CAP;
     this._fpsFrames = 0;
     this._fpsLast = performance.now();
-
-    // Register event handlers BEFORE async init so mount-time push_events are captured
-    this.handleEvent("emit_tokenes", (data) => this._dispatch("emit_tokenes", data));
-    this.handleEvent("absorb_tokene", (data) => this._dispatch("absorb_tokene", data));
-    this.handleEvent("transform_tokene", (data) => this._dispatch("transform_tokene", data));
-    this.handleEvent("add_node", (data) => this._dispatch("add_node", data));
-    this.handleEvent("remove_node", (data) => this._dispatch("remove_node", data));
-    this.handleEvent("set_gravity", (data) => this._dispatch("set_gravity", data));
-    this.handleEvent("clear_tokenes", (data) => this._dispatch("clear_tokenes", data));
-    this.handleEvent("clear_nodes", (data) => this._dispatch("clear_nodes", data));
-    this.handleEvent("update_collector", (data) => this._dispatch("update_collector", data));
-    this.handleEvent("shatter_tokene", (data) => this._dispatch("shatter_tokene", data));
-    this.handleEvent("set_decay", (data) => this._dispatch("set_decay", data));
-
-    // Async init
-    this.rapier = await initRapier();
-    this.physics = new PhysicsWorld(this.rapier);
-    this.worldRenderer = new WorldRenderer(this.el);
-    this.running = true;
-
-    // Drag state
-    this._drag = null; // { nodeId, offsetX, offsetY }
+    // Drag state — populated lazily on first mousedown.
+    this._drag = null; // { nodeId, offsetX, offsetY, startX, startY }
     this._hoverNode = null;
+  },
 
-    // Create hover menu overlay
+  _registerServerEvents() {
+    for (const type of SERVER_EVENTS) {
+      this.handleEvent(type, (data) => this._dispatch(type, data));
+    }
+  },
+
+  _setupMouseHandlers() {
+    // Hover menu overlay (created lazily on first mounted setup).
     this._menu = document.createElement("div");
     this._menu.className = "q-node-menu";
     this._menu.style.display = "none";
     this.el.parentElement.appendChild(this._menu);
 
-    // Mouse events (store refs for cleanup)
     this._onMouseDownBound = (e) => this._onMouseDown(e);
     this._onMouseMoveBound = (e) => this._onMouseMove(e);
     this._onMouseUpBound = () => this._onMouseUp();
     this._onMouseLeaveBound = (e) => {
-      // Don't hide menu if mouse moved into the menu overlay
+      // Don't hide menu if the cursor moved into the menu overlay.
       if (this._menu.contains(e.relatedTarget)) return;
       this._onMouseUp();
       this._hideMenu();
     };
     this._onMenuLeaveBound = (e) => {
-      // Hide menu when leaving it, unless re-entering the canvas
+      // Keep the menu while moving from menu back into the canvas.
       if (e.relatedTarget === this.el) return;
       this._hideMenu();
     };
+
     this.el.addEventListener("mousedown", this._onMouseDownBound);
     this.el.addEventListener("mousemove", this._onMouseMoveBound);
     this.el.addEventListener("mouseup", this._onMouseUpBound);
     this.el.addEventListener("mouseleave", this._onMouseLeaveBound);
     this._menu.addEventListener("mouseleave", this._onMenuLeaveBound);
-
-    // Replay any events that arrived during init
-    this._ready = true;
-    for (const [type, data] of this._eventQueue) {
-      this._handle(type, data);
-    }
-    this._eventQueue = [];
-
-    // Start animation loop
-    this.animate();
   },
 
   _dispatch(type, data) {
@@ -114,19 +112,11 @@ const WorldCanvas = {
   },
 
   _handle(type, data) {
-    switch (type) {
-      case "emit_tokenes":     this.onEmitTokenes(data); break;
-      case "absorb_tokene":    this.onAbsorbTokene(data); break;
-      case "transform_tokene": this.onTransformTokene(data); break;
-      case "add_node":         this.onAddNode(data); break;
-      case "remove_node":      this.onRemoveNode(data); break;
-      case "set_gravity":      this.onSetGravity(data); break;
-      case "clear_tokenes":    this.onClearTokenes(); break;
-      case "clear_nodes":      this.onClearNodes(); break;
-      case "update_collector": this.onUpdateCollector(data); break;
-      case "shatter_tokene":  this.onShatterTokene(data); break;
-      case "set_decay":        this.onSetDecay(data); break;
-    }
+    // Snake-case "emit_tokenes" -> camelCase "onEmitTokenes". Listed in
+    // SERVER_EVENTS; the corresponding `on…` method must exist on this object.
+    const method = "on" + type.replace(/(^|_)(.)/g, (_m, _u, c) => c.toUpperCase());
+    const fn = this[method];
+    if (typeof fn === "function") fn.call(this, data);
   },
 
   destroyed() {
@@ -198,9 +188,12 @@ const WorldCanvas = {
       this.worldRenderer.moveNode(this._drag.nodeId, nx, ny);
       // Use moveBody so passives (static) move too, not just kinematic nodes
       this.physics.moveBody(this._drag.nodeId, nx, -ny);
-      // Keep the conveyor surface-velocity raycast in sync with the new pos
+      // Per-feature caches that hold a node's physics-space position need to
+      // be kept in sync, otherwise force fields keep pointing at the old spot.
       const conv = this.conveyors.get(this._drag.nodeId);
       if (conv) { conv.x = nx; conv.y = -ny; }
+      const mag = this.magnets.get(this._drag.nodeId);
+      if (mag) { mag.x = nx; mag.y = -ny; }
       return;
     }
     // Hover detection
@@ -373,7 +366,7 @@ const WorldCanvas = {
     this._enforceTokeneCap();
   },
 
-  onTransformTokene({ old_tokene_id, new_tokenes }) {
+  onTransformTokene({ transformer_id, old_tokene_id, new_tokenes }) {
     // Remove old
     this.physics.remove(old_tokene_id);
     const oldMesh = this.worldRenderer.meshes.get(old_tokene_id);
@@ -381,6 +374,18 @@ const WorldCanvas = {
     const oldPos = oldMesh ? { x: oldMesh.position.x, y: -oldMesh.position.y } : { x: 0, y: 0 };
     this.worldRenderer.removeTokene(old_tokene_id);
     this.tokeneData.delete(old_tokene_id);
+
+    // The new tokenes spawn inside the transformer's sensor zone. Without
+    // a cooldown they'd immediately re-fire the transformer (and each cycle
+    // multiplies the population — runaway with duplicator/tiktoken). Seed the
+    // transformer's cooldown set with the new ids and let it expire naturally.
+    let cooldownSet = null;
+    if (transformer_id) {
+      if (!this.sensorCooldown.has(transformer_id)) {
+        this.sensorCooldown.set(transformer_id, new Set());
+      }
+      cooldownSet = this.sensorCooldown.get(transformer_id);
+    }
 
     // Spawn new at old position with slight spread
     new_tokenes.forEach((t, i) => {
@@ -390,23 +395,39 @@ const WorldCanvas = {
       this.physics.spawnTokene(t.id, oldPos.x + xOff, oldPos.y, hw, hh, t.mass);
       this.worldRenderer.createTokeneMesh(t.id, t.value, t.encoding, t.width, t.height);
       this.tokeneData.set(t.id, { ...t, _spawnedAt: performance.now() });
+
+      if (cooldownSet) {
+        cooldownSet.add(t.id);
+        // Use the same window as a tokene entering a transformer for the first
+        // time — the new tokenes spawned inside the zone need to drift out
+        // before being eligible again.
+        const tid = setTimeout(() => cooldownSet.delete(t.id), SENSOR_COOLDOWN_MS.transformer);
+        this._pendingTimeouts.push(tid);
+      }
     });
   },
 
   onAddNode({ node }) {
+    this._installNode(node);
+    // Flash a fading halo so the user can see where the new node landed
+    this.worldRenderer.highlightNode(node.id, HIGHLIGHT_MS);
+  },
+
+  // Build the physics body, sensor (if any), and mesh for a node from its
+  // current config. Used by add_node and (after a tear-down) by config updates
+  // that change geometry — e.g., a transformer's radius driving both its
+  // visual size and its sensor zone.
+  _installNode(node) {
     const [x, y] = [node.position_x || 0, node.position_y || 0];
     const w = node.width || 80;
     const h = node.height || 40;
 
-    // Three.js uses Y-up; negate Y for rendering
     this.worldRenderer.createNodeMesh(
       node.id, node.type, node.label, x, -y, w, h, node.config || {}
     );
 
-    // Create physics body based on type
     if (node.type === "passive") {
       if (node.config?.shape === "portal") {
-        // Passthrough body so tokenes drift in visually; sensor triggers teleport.
         this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2, { passthrough: true });
         const r = parseFloat(node.config?.radius) || 30;
         this.physics.spawnSensor(node.id, x, y, r);
@@ -427,31 +448,83 @@ const WorldCanvas = {
         });
       }
     } else if (node.type === "collector") {
-      // Kinematic body + sensor zone
       this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2);
       const sensorRadius = node.config?.sensor_radius || 60;
       this.physics.spawnSensor(node.id, x, y, sensorRadius);
     } else if (node.type === "transformer") {
-      // Transformer: pass-through kinematic body + sensor zone for effect radius.
-      // Tokenes drift through the visual square; sensor triggers the effect.
       this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2, { passthrough: true });
       const effectRadius = parseFloat(node.config?.radius) || 60;
       this.physics.spawnSensor(node.id, x, y, effectRadius);
+      if (node.config?.effect === "magnet") {
+        this._registerMagnet(node);
+      }
     } else {
       this.physics.spawnKinematic(node.id, x, y, w / 2, h / 2);
     }
 
     this.nodeData.set(node.id, node);
-    // Flash a fading halo so the user can see where the new node landed
-    this.worldRenderer.highlightNode(node.id, 3000);
   },
 
   onRemoveNode({ node_id }) {
+    this._tearDownNode(node_id);
+    this.nodeData.delete(node_id);
+  },
+
+  // Like onRemoveNode but keeps nodeData — used by reinstall paths so the
+  // caller can swap in a new config without losing the entry.
+  _tearDownNode(node_id) {
     this.physics.remove(node_id);
     this.worldRenderer.removeNode(node_id);
-    this.nodeData.delete(node_id);
     this.conveyors.delete(node_id);
+    this.magnets.delete(node_id);
     this.sensorCooldown.delete(node_id);
+  },
+
+  onUpdateNodeConfig({ node_id, width, height, config, buffer }) {
+    const node = this.nodeData.get(node_id);
+    if (!node) return;
+    const merged = { ...node, config: { ...(node.config || {}), ...(config || {}) } };
+    if (typeof width === "number") merged.width = width;
+    if (typeof height === "number") merged.height = height;
+
+    // Transformers, passives, and collectors have geometry baked into their
+    // physics body, collider, mesh, and (where applicable) sensor zone. Any
+    // field that changes shape/size has to rebuild all of those. Cheapest
+    // correct path: full tear-down + reinstall under the same id.
+    if (merged.type === "transformer" || merged.type === "passive" || merged.type === "collector") {
+      this._tearDownNode(node_id);
+      this._installNode(merged);
+      // Buffer paint is held client-side and is wiped by the mesh rebuild.
+      // The server includes the current buffer so we can repaint on the spot.
+      if (merged.type === "collector" && Array.isArray(buffer)) {
+        this.worldRenderer.updateCollectorBuffer(node_id, buffer);
+      }
+      return;
+    }
+
+    this.nodeData.set(node_id, merged);
+  },
+
+  _registerMagnet(node) {
+    const r = parseFloat(node.config?.radius) || 100;
+    const polarity = node.config?.polarity || "attract";
+    const pattern = node.config?.pattern;
+    let regex = null;
+    if (pattern && pattern !== "") {
+      try { regex = new RegExp(pattern); } catch (_) { regex = null; }
+    }
+    this.magnets.set(node.id, {
+      x: node.position_x || 0,
+      y: node.position_y || 0,
+      r,
+      r2: r * r,
+      strength: parseFloat(node.config?.strength) || 250,
+      // attract pulls toward center (force opposite of dx,dy) -> sign -1
+      // repel pushes away from center -> sign +1
+      sign: polarity === "repel" ? 1 : -1,
+      regex,
+      encoding: node.config?.target_encoding || null,
+    });
   },
 
   onSetGravity({ x, y }) {
@@ -478,6 +551,7 @@ const WorldCanvas = {
     }
     this.nodeData.clear();
     this.conveyors.clear();
+    this.magnets.clear();
     this.sensorCooldown.clear();
   },
 
@@ -505,6 +579,9 @@ const WorldCanvas = {
       }
     }
 
+    // Snapshot magnets to a plain array so the inner loop avoids Map iteration.
+    const magList = this.magnets.size > 0 ? Array.from(this.magnets.values()) : null;
+
     // Single pass over tokeneData: transform sync + offscreen check + decay +
     // conveyor force. Previously each was its own iteration, paying for the
     // WASM crossing to fetch transforms multiple times per tokene per frame.
@@ -531,7 +608,7 @@ const WorldCanvas = {
           const initialIntegrity = t.integrity || 0.5;
           const ratio = initialIntegrity * Math.pow(0.5, elapsed / halfLife);
           this.worldRenderer.updateTokeneDecay(id, ratio / initialIntegrity);
-          if (ratio < 0.05 * initialIntegrity && !this._pendingShatter.has(id)) {
+          if (ratio < SHATTER_THRESHOLD * initialIntegrity && !this._pendingShatter.has(id)) {
             this._pendingShatter.add(id);
             this.pushEvent("tokene_shattered", { tokene_id: id });
           }
@@ -544,6 +621,11 @@ const WorldCanvas = {
       // 4) Conveyor surface drag
       if (convList) {
         this._applyConveyorForceToTokene(id, t, transform, convList);
+      }
+
+      // 5) Magnet radial force (regex + encoding filter, attract or repel)
+      if (magList) {
+        this._applyMagnetForceToTokene(id, t, transform, magList);
       }
     }
     if (!decayOn) this._decayAnchor = null;
@@ -566,10 +648,10 @@ const WorldCanvas = {
     // Render
     this.worldRenderer.render();
 
-    // FPS readout: roll over every ~500ms so the number is readable.
+    // FPS readout: roll over periodically so the number is readable.
     this._fpsFrames++;
     const fpsDt = now - this._fpsLast;
-    if (fpsDt >= 500) {
+    if (fpsDt >= FPS_INTERVAL_MS) {
       const fps = Math.round((this._fpsFrames * 1000) / fpsDt);
       const el = document.getElementById("q-fps");
       if (el) el.textContent = `${fps} fps · ${this.tokeneData.size} tok`;
@@ -603,9 +685,41 @@ const WorldCanvas = {
    * with a pre-fetched transform so we don't pay for an extra
    * physics.getTransform per conveyor per tokene per frame.
    */
+  /**
+   * Per-tokene magnet radial force. Falls off linearly from center to radius.
+   * A tokene must match (or pass) BOTH the regex on its value AND the encoding
+   * filter; either filter being empty means "match anything for this filter".
+   */
+  _applyMagnetForceToTokene(tid, tdata, xform, magList) {
+    for (let i = 0; i < magList.length; i++) {
+      const m = magList[i];
+      const dx = xform.x - m.x;
+      const dy = xform.y - m.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > m.r2 || d2 < 1) continue;
+
+      // Encoding filter
+      if (m.encoding && tdata.encoding !== m.encoding) continue;
+      // Regex filter
+      if (m.regex && !m.regex.test(tdata.value || "")) continue;
+
+      const d = Math.sqrt(d2);
+      const falloff = 1 - d / m.r;   // 1 at center -> 0 at edge
+      // strength is px/s² acceleration. Multiply by mass so applyImpulse
+      // produces the same per-frame Δv regardless of how heavy the tokene is
+      // — otherwise bits fly to the magnet while sentences crawl.
+      const body = this.physics.getBody(tid);
+      if (!body) continue;
+      const massBody = body.mass() || 1;
+      const a = m.sign * m.strength * falloff * MAGNET_DT * massBody;
+      const fx = (dx / d) * a;
+      const fy = (dy / d) * a;
+      // sign -1 attracts (force opposite of dx,dy); +1 repels (same direction)
+      body.applyImpulse({ x: fx, y: fy }, true);
+    }
+  },
+
   _applyConveyorForceToTokene(tid, tdata, xform, convList) {
-    const k = 0.15;          // tangent-speed coupling
-    const contactBand = 4;   // px above the surface that still counts as resting
     const thx = (tdata.width || 16) / 2;
     const thy = (tdata.height || 16) / 2;
 
@@ -617,13 +731,13 @@ const WorldCanvas = {
       const localX = dx * cos + dy * sin;
       const localY = -dx * sin + dy * cos;
       if (Math.abs(localX) > conv.hw + thx) continue;
-      if (localY > -conv.hh + 1) continue;                 // not above
-      if (localY < -conv.hh - thy - contactBand) continue; // too far above
+      if (localY > -conv.hh + 1) continue;                                  // not above
+      if (localY < -conv.hh - thy - CONVEYOR_CONTACT_BAND) continue;        // too far above
       const body = this.physics.getBody(tid);
       if (!body) continue;
       const v = body.linvel();
       const vt = v.x * cos + v.y * sin;
-      const dv = (conv.speed - vt) * k;
+      const dv = (conv.speed - vt) * CONVEYOR_COUPLING;
       const m = body.mass() || 1;
       body.applyImpulse({ x: cos * dv * m, y: sin * dv * m }, true);
     }
@@ -633,6 +747,9 @@ const WorldCanvas = {
     for (const [nodeId, nodeInfo] of this.nodeData) {
       const isPortal = nodeInfo.type === "passive" && nodeInfo.config?.shape === "portal";
       if (nodeInfo.type !== "collector" && nodeInfo.type !== "transformer" && !isPortal) continue;
+      // Magnets compute force per frame in animate() — they don't fire one-shot
+      // tokene_near_transformer events, since their effect is continuous.
+      if (nodeInfo.type === "transformer" && nodeInfo.config?.effect === "magnet") continue;
 
       const intersecting = this.physics.getSensorIntersections(nodeId);
       for (const tokeneId of intersecting) {
@@ -646,8 +763,9 @@ const WorldCanvas = {
         if (cooldownSet.has(tokeneId)) continue;
 
         cooldownSet.add(tokeneId);
-        const cooldownMs =
-          nodeInfo.type === "transformer" ? 1000 : isPortal ? 1500 : 500;
+        const cooldownMs = isPortal
+          ? SENSOR_COOLDOWN_MS.portal
+          : SENSOR_COOLDOWN_MS[nodeInfo.type] || SENSOR_COOLDOWN_MS.collector;
         const tid = setTimeout(() => cooldownSet.delete(tokeneId), cooldownMs);
         this._pendingTimeouts.push(tid);
 
@@ -697,7 +815,7 @@ const WorldCanvas = {
     // destination's cooldown and potentially tunnel through it).
     // Rapier is Y-down so "above" means -y.
     const r = parseFloat(dstInfo.config?.radius) || 30;
-    body.setTranslation({ x: dst.x, y: dst.y - r - 4 }, true);
+    body.setTranslation({ x: dst.x, y: dst.y - r - PORTAL_EXIT_CLEARANCE }, true);
     if (body.setLinvel) body.setLinvel({ x: 0, y: 0 }, true);
     if (body.setAngvel) body.setAngvel(0, true);
 

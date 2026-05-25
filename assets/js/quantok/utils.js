@@ -1,5 +1,6 @@
 /**
- * Shared constants and utility functions for the Quantok client.
+ * Palette and shared utility functions. Behavior-tuning constants
+ * (cooldowns, caps, decay rates, zoom limits, etc.) live in config.js.
  */
 
 // Encoding -> color mapping (bright, warm palette against dark bg)
@@ -20,14 +21,6 @@ export const ENCODING_COLORS = {
 export const DEFAULT_COLOR = 0xadb6c4;  // pale slate
 
 export const BG_COLOR = 0x001b2e;
-
-// Camera zoom limits
-export const ZOOM_MIN = 0.25;
-export const ZOOM_MAX = 4.0;
-export const ZOOM_SPEED = 0.001;
-
-// Offscreen removal threshold (pixels in physics space)
-export const OFFSCREEN_THRESHOLD = 2000;
 
 /**
  * Lerp between two hex colors by factor t (0..1).

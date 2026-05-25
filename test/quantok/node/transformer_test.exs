@@ -129,4 +129,44 @@ defmodule Quantok.Node.TransformerTest do
       assert painted.metadata.color == "red"
     end
   end
+
+  describe "tiktoken" do
+    test "encodes a word into one or more :token_id tokenes" do
+      node = Transformer.new(:tiktoken)
+      tokene = Tokene.new("hello", :word)
+
+      result = Transformer.apply_effect(node, tokene)
+      assert result != []
+      assert Enum.all?(result, &(&1.encoding == :token_id))
+      # Each value should be a digit string.
+      assert Enum.all?(result, &String.match?(&1.value, ~r/^\d+$/))
+    end
+
+    test "is a no-op on :token_id tokenes (prevents exponential explosion)" do
+      # Regression: a token_id tokene re-entering tiktoken would re-tokenize
+      # its digit string into N more ids, and each of those into M more, ...
+      node = Transformer.new(:tiktoken)
+      tokene = Tokene.new("13347", :token_id)
+
+      assert [^tokene] = Transformer.apply_effect(node, tokene)
+    end
+  end
+
+  describe "magnet" do
+    test "is a no-op on the server (force is computed client-side)" do
+      node = Transformer.new(:magnet, polarity: :attract, pattern: "world")
+      tokene = Tokene.new("hello world", :phrase)
+
+      [out] = Transformer.apply_effect(node, tokene)
+      assert out == tokene
+    end
+
+    test "defaults polarity to attract and uses high default radius/strength" do
+      node = Transformer.new(:magnet)
+      assert node.config.effect == :magnet
+      assert node.config.polarity == :attract
+      assert node.config.radius == 150.0
+      assert node.config.strength == 600.0
+    end
+  end
 end

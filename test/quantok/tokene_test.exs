@@ -95,6 +95,32 @@ defmodule Quantok.TokeneTest do
     end
   end
 
+  describe "display_value/1" do
+    test "valid UTF-8 is returned unchanged" do
+      assert Tokene.display_value(Tokene.new("hello", :word)) == "hello"
+      assert Tokene.display_value(Tokene.new("🚀", :rune)) == "🚀"
+    end
+
+    test "sub-rune byte chunks are hex-escaped" do
+      # 🚀 is F0 9F 9A 80 — a single byte of that is not valid UTF-8
+      assert Tokene.display_value(Tokene.new(<<0xF0>>, :byte)) == "F0"
+      assert Tokene.display_value(Tokene.new(<<0xF0, 0x9F>>, :byte)) == "F0 9F"
+    end
+
+    test "sub-byte bit chunks render as 0/1" do
+      assert Tokene.display_value(Tokene.new(<<0::1>>, :bit)) == "0"
+      assert Tokene.display_value(Tokene.new(<<1::1>>, :bit)) == "1"
+    end
+
+    test "JSON-encodable for any byte chunk" do
+      # Regression: Jason.EncodeError on byte tokenes from emoji emitters
+      for byte <- [0xF0, 0x9F, 0x9A, 0x80] do
+        tokene = Tokene.new(<<byte>>, :byte)
+        assert {:ok, _} = Jason.encode(%{value: Tokene.display_value(tokene)})
+      end
+    end
+  end
+
   describe "splittable?/1" do
     test "bits cannot be split" do
       refute Tokene.splittable?(Tokene.new("x", :bit))

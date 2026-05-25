@@ -27,7 +27,6 @@ defmodule Quantok.Node.PassiveTest do
     assert Passive.solid?(Passive.new(:floor))
     assert Passive.solid?(Passive.new(:wall))
     assert Passive.solid?(Passive.new(:ramp))
-    assert Passive.solid?(Passive.new(:funnel))
     assert Passive.solid?(Passive.new(:conveyor))
     refute Passive.solid?(Passive.new(:attractor))
     refute Passive.solid?(Passive.new(:repeller))

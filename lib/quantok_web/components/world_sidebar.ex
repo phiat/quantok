@@ -200,11 +200,22 @@ defmodule QuantokWeb.WorldSidebar do
         event="add_transformer"
         params={%{"effect" => "tiktoken"}}
       />
+      <.item
+        label="magnet · attract"
+        variant="transform"
+        event="add_transformer"
+        params={%{"effect" => "magnet", "polarity" => "attract"}}
+      />
+      <.item
+        label="magnet · repel"
+        variant="transform"
+        event="add_transformer"
+        params={%{"effect" => "magnet", "polarity" => "repel"}}
+      />
 
       <div class="q-section">World</div>
       <.item label="ramp" variant="passive" event="add_passive" params={%{"shape" => "ramp"}} />
       <.item label="wall" variant="passive" event="add_passive" params={%{"shape" => "wall"}} />
-      <.item label="funnel" variant="passive" event="add_passive" params={%{"shape" => "funnel"}} />
       <.item
         label="conveyor →"
         variant="passive"

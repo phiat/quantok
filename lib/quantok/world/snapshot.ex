@@ -189,6 +189,7 @@ defmodule Quantok.World.Snapshot do
       "strength" => config.strength,
       "target_encoding" => config[:target_encoding] && to_string(config.target_encoding),
       "pattern" => config[:pattern],
+      "polarity" => config[:polarity] && to_string(config.polarity),
       "color" => config[:color]
     }
   end
@@ -254,14 +255,21 @@ defmodule Quantok.World.Snapshot do
   end
 
   defp deserialize_node(%{"type" => "transformer"} = data) do
-    effect = safe_effect(data["config"]["effect"])
+    config = data["config"]
+    effect = safe_effect(config["effect"])
 
-    Transformer.new(effect,
-      radius: data["config"]["radius"] || 50.0,
-      strength: data["config"]["strength"] || 0.5,
-      position: deserialize_position(data["position"]),
-      label: data["label"] || "Transformer"
-    )
+    opts =
+      [
+        radius: config["radius"] || 50.0,
+        strength: config["strength"] || 0.5,
+        position: deserialize_position(data["position"]),
+        label: data["label"] || "Transformer"
+      ]
+      |> maybe_put(:pattern, config["pattern"])
+      |> maybe_put(:target_encoding, safe_encoding(config["target_encoding"]))
+      |> maybe_put(:polarity, safe_polarity(config["polarity"]))
+
+    Transformer.new(effect, opts)
   end
 
   defp deserialize_node(%{"type" => "passive"} = data) do
@@ -340,17 +348,27 @@ defmodule Quantok.World.Snapshot do
   defp safe_effect("duplicator"), do: :duplicator
   defp safe_effect("painter"), do: :painter
   defp safe_effect("tiktoken"), do: :tiktoken
+  defp safe_effect("magnet"), do: :magnet
   defp safe_effect(_), do: :splitter
 
   defp safe_shape("floor"), do: :floor
   defp safe_shape("wall"), do: :wall
   defp safe_shape("ramp"), do: :ramp
-  defp safe_shape("funnel"), do: :funnel
   defp safe_shape("attractor"), do: :attractor
   defp safe_shape("repeller"), do: :repeller
   defp safe_shape("conveyor"), do: :conveyor
   defp safe_shape("portal"), do: :portal
   defp safe_shape(_), do: :floor
+
+  defp safe_polarity("attract"), do: :attract
+  defp safe_polarity("repel"), do: :repel
+  defp safe_polarity(_), do: nil
+
+  defp safe_encoding(s) when s in ~w(bit byte rune token token_id word phrase sentence) do
+    String.to_existing_atom(s)
+  end
+
+  defp safe_encoding(_), do: nil
 
   defp safe_collector_command(action, command) do
     cmd = command || "echo"

@@ -251,12 +251,39 @@ defmodule Quantok.Tokene do
   @char_px 5.5
 
   @spec dimensions(t()) :: {float(), float()}
-  def dimensions(%__MODULE__{value: value}) do
-    len = String.length(value || "")
+  def dimensions(%__MODULE__{} = tokene) do
+    len = String.length(display_value(tokene))
     w = max(len * @char_px, 12.0)
     h = 12.0
     {w, h}
   end
+
+  @doc """
+  Returns a JSON-safe string for the tokene's value. Byte-chunked emoji and
+  bit tokenes produce sub-rune or sub-byte binaries that aren't valid UTF-8,
+  so we represent them as hex (`F0`) or bit (`0`/`1`) glyphs the client can render.
+  """
+  @spec display_value(t()) :: String.t()
+  def display_value(%__MODULE__{value: value, encoding: :bit}) do
+    case value do
+      <<0::1>> -> "0"
+      <<1::1>> -> "1"
+      _ -> "?"
+    end
+  end
+
+  def display_value(%__MODULE__{value: value}) when is_binary(value) do
+    if String.valid?(value) do
+      value
+    else
+      value
+      |> :binary.bin_to_list()
+      |> Enum.map_join(" ", &Integer.to_string(&1, 16))
+      |> String.upcase()
+    end
+  end
+
+  def display_value(%__MODULE__{}), do: ""
 
   @doc """
   Returns true if this tokene can be split further.

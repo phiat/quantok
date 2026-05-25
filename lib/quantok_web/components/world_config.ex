@@ -209,7 +209,7 @@ defmodule QuantokWeb.WorldConfig do
       <label class="q-cfg-label">effect</label>
       <div class="q-cfg-btns">
         <button
-          :for={e <- ~w(splitter heater cooler duplicator crusher tiktoken)}
+          :for={e <- ~w(splitter heater cooler duplicator crusher tiktoken magnet)}
           phx-click="update_node_config"
           phx-value-field="effect"
           phx-value-val={e}
@@ -222,7 +222,7 @@ defmodule QuantokWeb.WorldConfig do
       <label class="q-cfg-label">radius</label>
       <div class="q-cfg-btns">
         <button
-          :for={r <- [30, 60, 90, 120]}
+          :for={r <- [30, 60, 90, 120, 180]}
           phx-click="update_node_config"
           phx-value-field="radius"
           phx-value-val={r}
@@ -230,6 +230,68 @@ defmodule QuantokWeb.WorldConfig do
         >
           {r}
         </button>
+      </div>
+
+      <div :if={@config.effect == :magnet}>
+        <label class="q-cfg-label">polarity</label>
+        <div class="q-cfg-btns">
+          <button
+            :for={p <- ~w(attract repel)}
+            phx-click="update_node_config"
+            phx-value-field="polarity"
+            phx-value-val={p}
+            class={"q-cfg-btn" <> if(to_string(@config.polarity) == p, do: " q-cfg-btn--active", else: "")}
+          >
+            {p}
+          </button>
+        </div>
+
+        <label class="q-cfg-label">strength (px/s²)</label>
+        <div class="q-cfg-btns">
+          <button
+            :for={s <- [200, 600, 1200, 2400]}
+            phx-click="update_node_config"
+            phx-value-field="strength"
+            phx-value-val={s}
+            class={"q-cfg-btn" <> if(round(@config.strength) == s, do: " q-cfg-btn--active", else: "")}
+          >
+            {s}
+          </button>
+        </div>
+
+        <label class="q-cfg-label">target encoding</label>
+        <div class="q-cfg-btns">
+          <button
+            phx-click="update_node_config"
+            phx-value-field="target_encoding"
+            phx-value-val=""
+            class={"q-cfg-btn" <> if(is_nil(@config.target_encoding), do: " q-cfg-btn--active", else: "")}
+          >
+            any
+          </button>
+          <button
+            :for={enc <- ~w(bit byte rune token token_id word phrase sentence)}
+            phx-click="update_node_config"
+            phx-value-field="target_encoding"
+            phx-value-val={enc}
+            class={"q-cfg-btn" <> if(to_string(@config.target_encoding) == enc, do: " q-cfg-btn--active", else: "")}
+          >
+            {enc}
+          </button>
+        </div>
+
+        <label class="q-cfg-label">pattern (regex)</label>
+        <form phx-change="update_node_config" phx-submit="update_node_config">
+          <input type="hidden" name="field" value="pattern" />
+          <input
+            type="text"
+            name="val"
+            value={@config.pattern || ""}
+            placeholder="(leave blank to match any)"
+            class="q-cfg-input"
+            phx-debounce="500"
+          />
+        </form>
       </div>
     </div>
     """
@@ -243,7 +305,7 @@ defmodule QuantokWeb.WorldConfig do
       <label class="q-cfg-label">shape</label>
       <div class="q-cfg-btns">
         <button
-          :for={s <- ~w(floor wall ramp funnel conveyor portal)}
+          :for={s <- ~w(floor wall ramp conveyor portal)}
           phx-click="update_node_config"
           phx-value-field="shape"
           phx-value-val={s}
@@ -264,6 +326,21 @@ defmodule QuantokWeb.WorldConfig do
         >
           {w}
         </button>
+      </div>
+
+      <div :if={@config.shape in [:wall, :ramp]}>
+        <label class="q-cfg-label">angle</label>
+        <div class="q-cfg-btns">
+          <button
+            :for={{rad, label} <- angle_options()}
+            phx-click="update_node_config"
+            phx-value-field="angle"
+            phx-value-val={rad}
+            class={"q-cfg-btn" <> if(angle_active?(@config.angle, rad), do: " q-cfg-btn--active", else: "")}
+          >
+            {label}
+          </button>
+        </div>
       </div>
 
       <div :if={@config.shape == :conveyor}>
@@ -300,6 +377,23 @@ defmodule QuantokWeb.WorldConfig do
   end
 
   defp body(assigns), do: ~H""
+
+  # Mirrors the 7-step cycle used by the hover-rotate action so the config
+  # buttons land on the same canonical positions.
+  defp angle_options do
+    [
+      {-0.7854, "-45°"},
+      {-0.5236, "-30°"},
+      {-0.2618, "-15°"},
+      {0.0, "0°"},
+      {0.2618, "15°"},
+      {0.5236, "30°"},
+      {0.7854, "45°"}
+    ]
+  end
+
+  defp angle_active?(current, target) when is_number(current), do: abs(current - target) < 0.01
+  defp angle_active?(_, _), do: false
 
   defp module_label(nil), do: ""
   # BPE is exposed as "token" in the UI; canonical encoding name is :token.

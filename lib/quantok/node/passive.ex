@@ -3,7 +3,7 @@ defmodule Quantok.Node.Passive do
   Passive nodes are static world elements that shape physics.
 
   Config:
-  - :shape - :floor | :wall | :ramp | :funnel | :attractor | :repeller | :conveyor | :portal
+  - :shape - :floor | :wall | :ramp | :attractor | :repeller | :conveyor | :portal
   - :width / :height - dimensions
   - :angle - rotation for ramps (radians)
   - :strength - force magnitude for attractors/repellers
@@ -17,7 +17,7 @@ defmodule Quantok.Node.Passive do
   alias Quantok.Node
 
   @type shape ::
-          :floor | :wall | :ramp | :funnel | :attractor | :repeller | :conveyor | :portal
+          :floor | :wall | :ramp | :attractor | :repeller | :conveyor | :portal
 
   @doc """
   Creates a new passive node.
@@ -57,7 +57,7 @@ defmodule Quantok.Node.Passive do
   """
   @spec solid?(Node.t()) :: boolean()
   def solid?(%Node{config: %{shape: shape}})
-      when shape in [:floor, :wall, :ramp, :funnel, :conveyor],
+      when shape in [:floor, :wall, :ramp, :conveyor],
       do: true
 
   def solid?(_), do: false
@@ -72,7 +72,6 @@ defmodule Quantok.Node.Passive do
   defp default_width(:floor), do: 200.0
   defp default_width(:wall), do: 10.0
   defp default_width(:ramp), do: 150.0
-  defp default_width(:funnel), do: 120.0
   defp default_width(:conveyor), do: 240.0
   defp default_width(:portal), do: 40.0
   defp default_width(_), do: 0.0
@@ -80,7 +79,6 @@ defmodule Quantok.Node.Passive do
   defp default_height(:floor), do: 10.0
   defp default_height(:wall), do: 150.0
   defp default_height(:ramp), do: 10.0
-  defp default_height(:funnel), do: 80.0
   defp default_height(:conveyor), do: 12.0
   defp default_height(:portal), do: 40.0
   defp default_height(_), do: 0.0
@@ -100,7 +98,6 @@ defmodule Quantok.Node.Passive do
   defp passive_label(:floor), do: "Floor"
   defp passive_label(:wall), do: "Wall"
   defp passive_label(:ramp), do: "Ramp"
-  defp passive_label(:funnel), do: "Funnel"
   defp passive_label(:attractor), do: "Attractor"
   defp passive_label(:repeller), do: "Repeller"
   defp passive_label(:conveyor), do: "Conveyor"

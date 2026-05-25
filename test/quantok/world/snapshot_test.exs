@@ -182,6 +182,34 @@ defmodule Quantok.World.SnapshotTest do
     assert loaded.config.effect == :tiktoken
   end
 
+  test "magnet transformer round-trips polarity/pattern/encoding/strength/radius", %{pid: pid} do
+    magnet =
+      Transformer.new(:magnet,
+        label: "mag",
+        polarity: :repel,
+        pattern: "^[A-Z]",
+        target_encoding: :word,
+        radius: 140.0,
+        strength: 500.0
+      )
+
+    World.add_node(pid, magnet)
+
+    world = World.get_state(pid)
+    {:ok, decoded} = Snapshot.from_json(Snapshot.to_json(world))
+
+    {:ok, pid2} = World.start_link(world_name: "magnet-roundtrip")
+    {:ok, 1} = Snapshot.load_into(pid2, decoded)
+
+    loaded = pid2 |> World.get_state() |> Map.fetch!(:nodes) |> Map.values() |> hd()
+    assert loaded.config.effect == :magnet
+    assert loaded.config.polarity == :repel
+    assert loaded.config.pattern == "^[A-Z]"
+    assert loaded.config.target_encoding == :word
+    assert loaded.config.radius == 140.0
+    assert loaded.config.strength == 500.0
+  end
+
   test "math collector actions round-trip through save/load", %{pid: pid} do
     World.add_node(pid, Collector.new(action: Quantok.Node.Collector.Sum, label: "sum"))
 

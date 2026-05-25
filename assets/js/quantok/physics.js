@@ -120,7 +120,7 @@ export class PhysicsWorld {
 
   /** Remove a body, its colliders, and any associated sensor */
   remove(id) {
-    // Save collider handle before removing body (body removal invalidates attached colliders)
+    // Save collider handles before removing body (body removal invalidates attached colliders)
     const collider = this.colliders.get(id);
     if (collider) {
       this.colliderToId.delete(collider.handle);

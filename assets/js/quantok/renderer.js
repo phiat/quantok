@@ -9,10 +9,8 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
-import {
-  ENCODING_COLORS, DEFAULT_COLOR, BG_COLOR,
-  ZOOM_MIN, ZOOM_MAX, ZOOM_SPEED, lerpColor,
-} from "./utils";
+import { ENCODING_COLORS, DEFAULT_COLOR, BG_COLOR, lerpColor } from "./utils";
+import { ZOOM_MIN, ZOOM_MAX, ZOOM_SPEED } from "./config";
 
 // Below this rendered fontSize (in world px), text is too small to read
 // — skip the troika sync entirely and just show the colored rect.
@@ -238,6 +236,11 @@ export class WorldRenderer {
       default:            color = 0x294c60;
     }
 
+    // Magnet polarity tints the body so attract vs repel is readable at a glance.
+    if (nodeType === "transformer" && config.effect === "magnet") {
+      color = config.polarity === "repel" ? 0xff7a59 : 0x5fb3ff;
+    }
+
     // Main body — transformers are translucent so tokenes show through
     const bodyGeo = new THREE.PlaneGeometry(width, height);
     const bodyMat = new THREE.MeshStandardMaterial({
@@ -298,6 +301,27 @@ export class WorldRenderer {
       const circle = new THREE.Mesh(circleGeo, circleMat);
       circle.position.z = -0.1;
       group.add(circle);
+
+      // Magnets get extra concentric rings to suggest a force field. Attract
+      // rings step inward (denser toward the core); repel rings step outward.
+      if (config.effect === "magnet") {
+        const steps = 3;
+        for (let i = 1; i <= steps; i++) {
+          const t = i / (steps + 1);
+          const rInner = radius * (1 - t);
+          if (rInner < 4) continue;
+          const ringGeo = new THREE.RingGeometry(rInner - 0.6, rInner, 32);
+          const ringMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.18,
+            side: THREE.DoubleSide,
+          });
+          const ring = new THREE.Mesh(ringGeo, ringMat);
+          ring.position.z = -0.1;
+          group.add(ring);
+        }
+      }
     }
 
     // Spout for collectors that emit

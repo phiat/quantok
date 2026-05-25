@@ -5,9 +5,10 @@ defmodule Quantok.Node.Transformer do
   Config:
   - :effect - the transformation type
   - :radius - zone of effect radius
-  - :strength - effect intensity (0.0-1.0)
-  - :target_encoding - for :splitter/:retokenizer, the target encoding level
-  - :pattern - for :filter, a regex pattern string
+  - :strength - effect intensity (0.0-1.0 for integrity ops, px/s² for :magnet)
+  - :target_encoding - for :splitter/:retokenizer/:magnet, the target encoding level
+  - :pattern - for :filter/:magnet, a regex pattern string
+  - :polarity - for :magnet, :attract (pulls toward center) or :repel (pushes away)
   """
 
   alias Quantok.Chunker
@@ -23,6 +24,9 @@ defmodule Quantok.Node.Transformer do
           | :duplicator
           | :painter
           | :tiktoken
+          | :magnet
+
+  @type polarity :: :attract | :repel
 
   @doc """
   Creates a new transformer node.
@@ -33,11 +37,12 @@ defmodule Quantok.Node.Transformer do
 
     config = %{
       effect: effect,
-      radius: Keyword.get(opts, :radius, 50.0),
-      strength: Keyword.get(opts, :strength, 0.5),
+      radius: Keyword.get(opts, :radius, default_radius(effect)),
+      strength: Keyword.get(opts, :strength, default_strength(effect)),
       target_encoding: Keyword.get(opts, :target_encoding, nil),
       pattern: pattern,
       compiled_pattern: compile_pattern(pattern),
+      polarity: Keyword.get(opts, :polarity, :attract),
       color: Keyword.get(opts, :color, nil)
     }
 
@@ -68,6 +73,11 @@ defmodule Quantok.Node.Transformer do
     chunks = Chunker.Byte.chunk(tokene.value)
     Enum.map(chunks, &Tokene.new(&1, :byte, tokene.source_id))
   end
+
+  # Already-encoded token ids are a fixed point — encoding again would
+  # re-tokenize the digit string into more ids and cascade exponentially.
+  def apply_effect(%Node{config: %{effect: :tiktoken}}, %Tokene{encoding: :token_id} = tokene),
+    do: [tokene]
 
   def apply_effect(%Node{config: %{effect: :tiktoken}}, tokene) do
     tokene.value
@@ -102,6 +112,10 @@ defmodule Quantok.Node.Transformer do
     [%{tokene | metadata: Map.put(tokene.metadata, :color, color)}]
   end
 
+  # Magnet: no-op on the server. The visual zone, regex match, and continuous
+  # radial force are all computed client-side per frame (see world_hook.js).
+  def apply_effect(%Node{config: %{effect: :magnet}}, tokene), do: [tokene]
+
   def apply_effect(_node, tokene), do: [tokene]
 
   defp chunker_for_encoding(:byte), do: Quantok.Chunker.Byte
@@ -129,5 +143,16 @@ defmodule Quantok.Node.Transformer do
   defp transformer_label(:filter), do: "Filter"
   defp transformer_label(:duplicator), do: "Duplicator"
   defp transformer_label(:painter), do: "Painter"
+  defp transformer_label(:magnet), do: "Magnet"
   defp transformer_label(effect), do: to_string(effect)
+
+  # Magnets reach further (positional force) and use much higher "strength"
+  # values since they're px/s² accelerations rather than 0..1 integrity deltas.
+  # Default strength is ~4× gravity (150 px/s²) so the pull is clearly visible
+  # against a falling tokene even at half-radius (where falloff = 0.5).
+  defp default_radius(:magnet), do: 150.0
+  defp default_radius(_), do: 50.0
+
+  defp default_strength(:magnet), do: 600.0
+  defp default_strength(_), do: 0.5
 end
